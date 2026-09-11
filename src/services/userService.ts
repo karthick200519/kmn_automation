@@ -46,25 +46,18 @@ export const userService = {
     if (!isSupabaseConfigured()) {
       return [...localProfiles];
     }
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('name', { ascending: true });
 
-      if (error || !data || data.length === 0) {
-        return [...localProfiles];
-      }
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, name, email, phone_number, role, status, created_at, updated_at')
+      .order('name', { ascending: true });
 
-      // Merge remote profiles with local custom profiles
-      const remoteProfiles = data as Profile[];
-      const remoteEmails = new Set(remoteProfiles.map((r) => r.email?.toLowerCase()));
-      const localOnly = localProfiles.filter((l) => !remoteEmails.has(l.email?.toLowerCase()));
-      localProfiles = [...localOnly, ...remoteProfiles];
-      return localProfiles;
-    } catch {
-      return [...localProfiles];
+    if (error) {
+      console.error('Failed to load users from Supabase:', error);
+      throw new Error(error.message || 'Failed to fetch user accounts from database.');
     }
+
+    return (data || []) as Profile[];
   },
 
   async createUser(user: {
@@ -75,131 +68,176 @@ export const userService = {
     role: UserRole;
     status: UserStatus;
   }): Promise<{ success: boolean; error?: string; user?: Profile }> {
-    const newProfile: Profile = {
-      id: crypto.randomUUID(),
-      name: user.name.trim(),
-      email: user.email.trim(),
-      phone_number: user.phone_number?.trim() || null,
-      password: user.password || null,
-      role: user.role,
-      status: user.status,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    localProfiles = [newProfile, ...localProfiles];
-    saveCustomProfiles(localProfiles);
-
     if (!isSupabaseConfigured()) {
+      const newProfile: Profile = {
+        id: crypto.randomUUID(),
+        name: user.name.trim(),
+        email: user.email.trim(),
+        phone_number: user.phone_number?.trim() || null,
+        role: user.role,
+        status: user.status,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      localProfiles = [newProfile, ...localProfiles];
+      saveCustomProfiles(localProfiles);
       return { success: true, user: newProfile };
     }
 
     try {
-      // 1. Attempt Supabase Auth Sign Up if password provided
-      if (user.password) {
-        try {
-          await supabase.auth.signUp({
-            email: user.email.trim(),
-            password: user.password,
-            options: {
-              data: {
-                name: user.name.trim(),
-                role: user.role,
-                phone_number: user.phone_number?.trim(),
-              },
-            },
-          });
-        } catch {
-          // Ignore Auth sign up duplicate errors if user exists
-        }
-      }
-
-      // 2. Insert into profiles table
-      const { data, error } = await supabase
-        .from('profiles')
-        .insert({
-          id: newProfile.id,
-          name: newProfile.name,
-          email: newProfile.email,
-          role: newProfile.role,
-          status: newProfile.status,
-          created_at: newProfile.created_at,
-          updated_at: newProfile.updated_at,
-        })
-        .select()
-        .single();
+      const { data, error } = await supabase.functions.invoke('create-user', {
+        body: {
+          name: user.name.trim(),
+          email: user.email.trim().toLowerCase(),
+          password: user.password,
+          phone_number: user.phone_number?.trim() || undefined,
+          role: user.role,
+          status: user.status,
+        },
+      });
 
       if (error) {
-        return { success: true, user: newProfile };
+        console.error('create-user function error:', error);
+        return {
+          success: false,
+          error: error.message || 'Unable to invoke user creation service.',
+        };
       }
-      return { success: true, user: data as Profile };
-    } catch {
-      return { success: true, user: newProfile };
+
+      if (!data || data.success === false) {
+        return {
+          success: false,
+          error: data?.error || 'Failed to create user account.',
+        };
+      }
+
+      return {
+        success: true,
+        user: data.user as Profile,
+      };
+    } catch (err: any) {
+      console.error('Unexpected error creating user:', err);
+      return {
+        success: false,
+        error: err.message || 'An unexpected error occurred while creating the user.',
+      };
     }
   },
 
   async updateUserRole(
     userId: string,
-    name: string,
-    role: UserRole,
-    status: UserStatus,
-    phone_number?: string,
-    password?: string
+    roleOrName: UserRole | string,
+    statusOrRole?: UserStatus | UserRole,
+    statusParam?: UserStatus,
+    nameParam?: string,
+    phoneNumberParam?: string
   ): Promise<{ success: boolean; error?: string }> {
-    localProfiles = localProfiles.map((u) =>
-      u.id === userId
-        ? {
-            ...u,
-            name: name.trim(),
-            role,
-            status,
-            phone_number: phone_number?.trim() || u.phone_number,
-            password: password || u.password,
-            updated_at: new Date().toISOString(),
-          }
-        : u
-    );
+    let finalName: string | undefined;
+    let finalRole: UserRole;
+    let finalStatus: UserStatus;
+    let finalPhone: string | undefined;
 
-    saveCustomProfiles(localProfiles);
+    if (['admin', 'engineer', 'operator'].includes(roleOrName as string)) {
+      finalRole = roleOrName as UserRole;
+      finalStatus = (statusOrRole as UserStatus) || 'active';
+      finalName = nameParam;
+      finalPhone = phoneNumberParam;
+    } else {
+      finalName = roleOrName as string;
+      finalRole = statusOrRole as UserRole;
+      finalStatus = statusParam || 'active';
+      finalPhone = phoneNumberParam;
+    }
 
     if (!isSupabaseConfigured()) {
+      localProfiles = localProfiles.map((u) =>
+        u.id === userId
+          ? {
+              ...u,
+              name: finalName?.trim() || u.name,
+              role: finalRole,
+              status: finalStatus,
+              phone_number: finalPhone?.trim() || u.phone_number,
+              updated_at: new Date().toISOString(),
+            }
+          : u
+      );
+      saveCustomProfiles(localProfiles);
       return { success: true };
     }
 
     try {
+      const updates: Record<string, any> = {
+        role: finalRole,
+        status: finalStatus,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (finalName) {
+        updates.name = finalName.trim();
+      }
+
+      if (finalPhone !== undefined) {
+        updates.phone_number = finalPhone.trim() || null;
+      }
+
       const { error } = await supabase
         .from('profiles')
-        .update({
-          name: name.trim(),
-          role,
-          status,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updates)
         .eq('id', userId);
 
       if (error) {
-        return { success: true };
+        console.error('Failed to update user profile in Supabase:', error);
+        return {
+          success: false,
+          error: error.message || 'Failed to update user profile.',
+        };
       }
 
       return { success: true };
-    } catch {
-      return { success: true };
+    } catch (err: any) {
+      console.error('Unexpected error updating user:', err);
+      return {
+        success: false,
+        error: err.message || 'An unexpected error occurred while updating the profile.',
+      };
     }
   },
 
   async deleteUser(userId: string): Promise<{ success: boolean; error?: string }> {
-    localProfiles = localProfiles.filter((u) => u.id !== userId);
-    saveCustomProfiles(localProfiles);
-
     if (!isSupabaseConfigured()) {
+      localProfiles = localProfiles.filter((u) => u.id !== userId);
+      saveCustomProfiles(localProfiles);
       return { success: true };
     }
 
     try {
-      await supabase.from('profiles').delete().eq('id', userId);
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        body: { user_id: userId },
+      });
+
+      if (error) {
+        console.error('delete-user function error:', error);
+        return {
+          success: false,
+          error: error.message || 'Failed to invoke delete user service.',
+        };
+      }
+
+      if (!data || data.success === false) {
+        return {
+          success: false,
+          error: data?.error || 'Failed to delete user account.',
+        };
+      }
+
       return { success: true };
-    } catch {
-      return { success: true };
+    } catch (err: any) {
+      console.error('Unexpected error deleting user:', err);
+      return {
+        success: false,
+        error: err.message || 'An unexpected error occurred while deleting the user.',
+      };
     }
   },
 };
