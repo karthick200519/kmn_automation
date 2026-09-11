@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
 import type { Profile, UserRole, UserStatus } from '../types/database';
 import { userService } from '../services/userService';
+import { supabase, isSupabaseConfigured } from '../services/supabase/client';
+import { MOCK_PROFILES } from '../services/mockData';
 import {
   Users,
   UserPlus,
@@ -211,8 +213,17 @@ export const UsersPage: React.FC = () => {
               <Users className="w-5 h-5 text-blue-600" />
               <span>User Accounts & RBAC Access Control</span>
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Manage system access roles (Admin, Engineer, Operator) and authentication accounts
+            <p className="text-xs text-slate-500 mt-0.5 flex flex-wrap items-center gap-2">
+              <span>Manage system access roles (Admin, Engineer, Operator) and authentication accounts</span>
+              {isSupabaseConfigured() && Boolean(supabase) ? (
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  Supabase Cloud Auth Active
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                  Local Profile Mode ({MOCK_PROFILES.length} Default Profiles)
+                </span>
+              )}
             </p>
           </div>
 
