@@ -5,8 +5,6 @@ import type { Profile, UserRole } from '../types/database';
 import { rateLimiter } from '../utils/rateLimiter';
 import { sanitizeErrorMessage } from '../utils/security';
 import { loginSchema } from '../utils/validation';
-import { MOCK_PROFILES } from '../services/mockData';
-import { userService } from '../services/userService';
 
 const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 Hours
 
@@ -51,25 +49,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (currentSession?.user) {
           await fetchProfile(currentSession.user.id, currentSession.user.email);
         } else {
-          // Check local storage for persistent user login
-          const savedRole = localStorage.getItem('demo_user_role') as UserRole;
-          const savedName = localStorage.getItem('demo_user_name');
-          const savedEmail = localStorage.getItem('demo_user_email');
-          if (savedRole && savedEmail) {
-            // Find existing profile in userService
-            const existing = userService.findProfileByEmail(savedEmail);
-            const demoProfile: Profile = existing || {
-              id: 'user-id-' + savedEmail,
-              name: savedName || 'Karthick (Admin)',
-              email: savedEmail,
-              role: savedRole,
-              status: 'active',
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            };
-            setProfile(demoProfile);
-            setRole(savedRole);
-          }
+          // No authenticated Supabase session: do not restore demo/local users.
+          setProfile(null);
+          setRole('operator');
         }
       } catch (err) {
         console.error('Auth initialization error:', err);
@@ -94,6 +76,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem('demo_user_role');
         localStorage.removeItem('demo_user_name');
         localStorage.removeItem('demo_user_email');
+        localStorage.removeItem('user_role');
+        localStorage.removeItem('user_name');
+        localStorage.removeItem('user_email');
         localStorage.removeItem('session_start_timestamp');
       }
     });
@@ -115,39 +100,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const fetchProfile = async (userId: string, email?: string) => {
+  const fetchProfile = async (userId: string, email?: string): Promise<Profile | null> => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, name, email, role, status, created_at, updated_at')
         .eq('id', userId)
         .single();
 
-      if (data && !error) {
-        setProfile(data as Profile);
-        setRole(data.role as UserRole);
-      } else {
-        const defaultProfile: Profile = {
-          id: userId,
-          name: email ? email.split('@')[0] : 'User',
-          email: email || '',
-          role: 'admin',
-          status: 'active',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        setProfile(defaultProfile);
-        setRole('admin');
+      if (error || !data) {
+        console.error('Profile lookup failed:', error);
+        setProfile(null);
+        setRole('operator');
+        return null;
       }
-    } catch {
-      setRole('admin');
+
+      if (data.status !== 'active') {
+        console.warn('Authenticated user profile is inactive:', email || data.email);
+        await supabase.auth.signOut();
+        setProfile(null);
+        setRole('operator');
+        return null;
+      }
+
+      const typedProfile = data as Profile;
+
+      setProfile(typedProfile);
+      setRole(typedProfile.role as UserRole);
+
+      // Store only non-sensitive display state. Supabase remains the source of authentication truth.
+      localStorage.setItem('user_role', typedProfile.role);
+      localStorage.setItem('user_name', typedProfile.name);
+      localStorage.setItem('user_email', typedProfile.email);
+
+      return typedProfile;
+    } catch (err) {
+      console.error('Profile fetch error:', err);
+      setProfile(null);
+      setRole('operator');
+      return null;
     }
   };
 
   const signIn = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
     const validationResult = loginSchema.safeParse({ email, password: pass });
     if (!validationResult.success) {
-      const firstErr = validationResult.error.errors[0]?.message || 'Invalid email or password.';
+      const firstErr = validationResult.error.issues[0]?.message || 'Invalid email or password.';
       return { success: false, error: firstErr };
     }
 
@@ -170,49 +168,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         rateLimiter.registerFailedAuth(clientIp, email);
 
-        // Check if email matches any created user profile in userService
-        const matchedProfile = userService.findProfileByEmail(email);
-        if (matchedProfile) {
-          if (matchedProfile.status === 'inactive') {
-            return { success: false, error: 'Your user account is currently set to Inactive. Please contact an administrator.' };
-          }
-          if (matchedProfile.password && matchedProfile.password !== pass) {
-            return { success: false, error: 'Invalid password. Please check your credentials.' };
-          }
-
-          setProfile(matchedProfile);
-          setRole(matchedProfile.role);
-          localStorage.setItem('demo_user_role', matchedProfile.role);
-          localStorage.setItem('demo_user_name', matchedProfile.name);
-          localStorage.setItem('demo_user_email', matchedProfile.email);
-          localStorage.setItem('session_start_timestamp', String(Date.now()));
-          rateLimiter.registerSuccessfulAuth(clientIp, email);
-          return { success: true };
-        }
-        
-        if (email.toLowerCase().includes('admin') || email.toLowerCase().includes('engineer') || email.toLowerCase().includes('operator') || email === 'admin@industrial.com') {
-          let assignedRole: UserRole = 'admin';
-          if (email.includes('engineer')) assignedRole = 'engineer';
-          if (email.includes('operator')) assignedRole = 'operator';
-
-          const demoProfile: Profile = MOCK_PROFILES.find(p => p.role === assignedRole) || MOCK_PROFILES[0];
-          setProfile(demoProfile);
-          setRole(assignedRole);
-          localStorage.setItem('demo_user_role', assignedRole);
-          localStorage.setItem('demo_user_name', demoProfile.name);
-          localStorage.setItem('demo_user_email', demoProfile.email || email);
-          localStorage.setItem('session_start_timestamp', String(Date.now()));
-          rateLimiter.registerSuccessfulAuth(clientIp, email);
-          return { success: true };
-        }
-
-        return { success: false, error: sanitizeErrorMessage(error, 'Unable to complete sign-in. Please verify your credentials.') };
+        return {
+          success: false,
+          error: sanitizeErrorMessage(
+            error,
+            'Unable to complete sign-in. Please verify your credentials.'
+          ),
+        };
       }
-
       if (data.user) {
+        const loadedProfile = await fetchProfile(data.user.id, data.user.email);
+
+        if (!loadedProfile) {
+          await supabase.auth.signOut();
+
+          return {
+            success: false,
+            error: 'Unable to load your user profile. Please contact an administrator.',
+          };
+        }
+
         localStorage.setItem('session_start_timestamp', String(Date.now()));
         rateLimiter.registerSuccessfulAuth(clientIp, email);
-        await fetchProfile(data.user.id, data.user.email);
+
         return { success: true };
       }
 
@@ -236,7 +214,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.removeItem('demo_user_role');
       localStorage.removeItem('demo_user_name');
       localStorage.removeItem('demo_user_email');
-      localStorage.removeItem('session_start_timestamp');
+      localStorage.removeItem('user_role');
+        localStorage.removeItem('user_name');
+        localStorage.removeItem('user_email');
+        localStorage.removeItem('session_start_timestamp');
     }
   };
 
@@ -245,7 +226,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (profile) {
       setProfile({ ...profile, role: newRole });
     }
-    localStorage.setItem('demo_user_role', newRole);
+    localStorage.setItem('user_role', newRole);
   };
 
   return (

@@ -27,14 +27,14 @@ export const SchedulePage: React.FC = () => {
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    fetchSchedules();
-  }, []);
-
   const fetchSchedules = async () => {
     const data = await scheduleService.getSchedules();
     setSchedules(data);
   };
+
+  useEffect(() => {
+    fetchSchedules();
+  }, []);
 
   const handleOpenCreate = () => {
     setTitle('');
