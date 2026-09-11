@@ -6,6 +6,7 @@ import { rateLimiter } from '../utils/rateLimiter';
 import { sanitizeErrorMessage } from '../utils/security';
 import { loginSchema } from '../utils/validation';
 import { MOCK_PROFILES } from '../services/mockData';
+import { userService } from '../services/userService';
 
 const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 Hours
 
@@ -50,13 +51,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (currentSession?.user) {
           await fetchProfile(currentSession.user.id, currentSession.user.email);
         } else {
-          // Check local storage for persistent demo user login
+          // Check local storage for persistent user login
           const savedRole = localStorage.getItem('demo_user_role') as UserRole;
           const savedName = localStorage.getItem('demo_user_name');
           const savedEmail = localStorage.getItem('demo_user_email');
           if (savedRole && savedEmail) {
-            const demoProfile: Profile = {
-              id: 'demo-user-id',
+            // Find existing profile in userService
+            const existing = userService.findProfileByEmail(savedEmail);
+            const demoProfile: Profile = existing || {
+              id: 'user-id-' + savedEmail,
               name: savedName || 'Karthick (Admin)',
               email: savedEmail,
               role: savedRole,
@@ -166,6 +169,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         rateLimiter.registerFailedAuth(clientIp, email);
+
+        // Check if email matches any created user profile in userService
+        const matchedProfile = userService.findProfileByEmail(email);
+        if (matchedProfile) {
+          if (matchedProfile.status === 'inactive') {
+            return { success: false, error: 'Your user account is currently set to Inactive. Please contact an administrator.' };
+          }
+          if (matchedProfile.password && matchedProfile.password !== pass) {
+            return { success: false, error: 'Invalid password. Please check your credentials.' };
+          }
+
+          setProfile(matchedProfile);
+          setRole(matchedProfile.role);
+          localStorage.setItem('demo_user_role', matchedProfile.role);
+          localStorage.setItem('demo_user_name', matchedProfile.name);
+          localStorage.setItem('demo_user_email', matchedProfile.email);
+          localStorage.setItem('session_start_timestamp', String(Date.now()));
+          rateLimiter.registerSuccessfulAuth(clientIp, email);
+          return { success: true };
+        }
         
         if (email.toLowerCase().includes('admin') || email.toLowerCase().includes('engineer') || email.toLowerCase().includes('operator') || email === 'admin@industrial.com') {
           let assignedRole: UserRole = 'admin';
