@@ -127,10 +127,10 @@ export const userService = {
   async updateUserRole(
     userId: string,
     roleOrName: UserRole | string,
-    statusOrRole?: UserStatus | UserRole,
-    statusParam?: UserStatus,
-    nameParam?: string,
-    phoneNumberParam?: string
+    statusOrRole: UserStatus | UserRole = 'active',
+    statusOrNameParam?: UserStatus | string,
+    nameOrPhoneParam?: string,
+    phoneParam?: string
   ): Promise<{ success: boolean; error?: string }> {
     let finalName: string | undefined;
     let finalRole: UserRole;
@@ -140,13 +140,13 @@ export const userService = {
     if (['admin', 'engineer', 'operator'].includes(roleOrName as string)) {
       finalRole = roleOrName as UserRole;
       finalStatus = (statusOrRole as UserStatus) || 'active';
-      finalName = nameParam;
-      finalPhone = phoneNumberParam;
+      finalName = typeof statusOrNameParam === 'string' ? statusOrNameParam : undefined;
+      finalPhone = nameOrPhoneParam;
     } else {
       finalName = roleOrName as string;
       finalRole = statusOrRole as UserRole;
-      finalStatus = statusParam || 'active';
-      finalPhone = phoneNumberParam;
+      finalStatus = (statusOrNameParam as UserStatus) || 'active';
+      finalPhone = typeof nameOrPhoneParam === 'string' ? nameOrPhoneParam : phoneParam;
     }
 
     if (!isSupabaseConfigured()) {

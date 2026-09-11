@@ -14,7 +14,7 @@ function isNonEmptyString(value: unknown, maxLength = 100): value is string {
 }
 
 export default {
-  fetch: withSupabase({ auth: "user" }, async (req, ctx) => {
+  fetch: withSupabase({ auth: "user" }, async (req: Request, ctx: any) => {
     if (req.method !== "POST") {
       return json({ success: false, error: "Method not allowed." }, 405);
     }
