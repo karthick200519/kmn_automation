@@ -4,7 +4,7 @@ import type { Alert } from '../types/database';
 import { alertService } from '../services/alertService';
 import { useAuth } from '../context/AuthContext';
 import { formatTimeAgo, getSeverityColorClass } from '../utils/formatters';
-import { Bell, CheckCircle, ShieldAlert, Filter } from 'lucide-react';
+import { Bell, Filter } from 'lucide-react';
 
 export const AlertsPage: React.FC = () => {
   const { profile } = useAuth();
