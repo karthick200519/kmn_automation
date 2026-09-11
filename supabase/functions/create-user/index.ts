@@ -1,4 +1,5 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
+// @ts-ignore
 import { withSupabase } from "npm:@supabase/server@^1";
 
 type CreateUserRequest = {
