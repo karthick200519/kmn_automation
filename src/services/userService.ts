@@ -2,9 +2,46 @@ import { supabase, isSupabaseConfigured } from './supabase/client';
 import type { Profile, UserRole, UserStatus } from '../types/database';
 import { MOCK_PROFILES } from './mockData';
 
-let localProfiles: Profile[] = [...MOCK_PROFILES];
+const CUSTOM_PROFILES_KEY = 'kmn_custom_profiles';
+
+const loadStoredProfiles = (): Profile[] => {
+  try {
+    const customJson = localStorage.getItem(CUSTOM_PROFILES_KEY);
+    if (customJson) {
+      const custom: Profile[] = JSON.parse(customJson);
+      const existingEmails = new Set(MOCK_PROFILES.map((p) => p.email?.toLowerCase()));
+      const filteredCustom = custom.filter((c) => !existingEmails.has(c.email?.toLowerCase()));
+      return [...filteredCustom, ...MOCK_PROFILES];
+    }
+  } catch {
+    // fallback
+  }
+  return [...MOCK_PROFILES];
+};
+
+const saveCustomProfiles = (profiles: Profile[]) => {
+  try {
+    const customOnly = profiles.filter(
+      (p) => !MOCK_PROFILES.some((m) => m.id === p.id || m.email?.toLowerCase() === p.email?.toLowerCase())
+    );
+    localStorage.setItem(CUSTOM_PROFILES_KEY, JSON.stringify(customOnly));
+  } catch {
+    // ignore
+  }
+};
+
+let localProfiles: Profile[] = loadStoredProfiles();
 
 export const userService = {
+  getProfilesSync(): Profile[] {
+    return localProfiles;
+  },
+
+  findProfileByEmail(email: string): Profile | undefined {
+    const cleanEmail = email.trim().toLowerCase();
+    return localProfiles.find((p) => p.email?.toLowerCase() === cleanEmail);
+  },
+
   async getUsers(): Promise<Profile[]> {
     if (!isSupabaseConfigured()) {
       return [...localProfiles];
@@ -19,7 +56,11 @@ export const userService = {
         return [...localProfiles];
       }
 
-      localProfiles = data as Profile[];
+      // Merge remote profiles with local custom profiles
+      const remoteProfiles = data as Profile[];
+      const remoteEmails = new Set(remoteProfiles.map((r) => r.email?.toLowerCase()));
+      const localOnly = localProfiles.filter((l) => !remoteEmails.has(l.email?.toLowerCase()));
+      localProfiles = [...localOnly, ...remoteProfiles];
       return localProfiles;
     } catch {
       return [...localProfiles];
@@ -47,12 +88,33 @@ export const userService = {
     };
 
     localProfiles = [newProfile, ...localProfiles];
+    saveCustomProfiles(localProfiles);
 
     if (!isSupabaseConfigured()) {
       return { success: true, user: newProfile };
     }
 
     try {
+      // 1. Attempt Supabase Auth Sign Up if password provided
+      if (user.password) {
+        try {
+          await supabase.auth.signUp({
+            email: user.email.trim(),
+            password: user.password,
+            options: {
+              data: {
+                name: user.name.trim(),
+                role: user.role,
+                phone_number: user.phone_number?.trim(),
+              },
+            },
+          });
+        } catch {
+          // Ignore Auth sign up duplicate errors if user exists
+        }
+      }
+
+      // 2. Insert into profiles table
       const { data, error } = await supabase
         .from('profiles')
         .insert({
@@ -98,6 +160,8 @@ export const userService = {
         : u
     );
 
+    saveCustomProfiles(localProfiles);
+
     if (!isSupabaseConfigured()) {
       return { success: true };
     }
@@ -125,6 +189,7 @@ export const userService = {
 
   async deleteUser(userId: string): Promise<{ success: boolean; error?: string }> {
     localProfiles = localProfiles.filter((u) => u.id !== userId);
+    saveCustomProfiles(localProfiles);
 
     if (!isSupabaseConfigured()) {
       return { success: true };
@@ -138,5 +203,3 @@ export const userService = {
     }
   },
 };
-
-
