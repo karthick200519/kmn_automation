@@ -133,12 +133,12 @@ export const UsersPage: React.FC = () => {
     newRole: UserRole,
     newStatus: UserStatus
   ) => {
-    const success = await userService.updateUserRole(userId, newRole, newStatus);
-    if (success) {
+    const res = await userService.updateUserRole(userId, newRole, newStatus);
+    if (res.success) {
       setEditingUser(null);
       await loadUsers();
     } else {
-      alert('Failed to update user profile.');
+      alert(res.error || 'Failed to update user profile.');
     }
   };
 
@@ -148,11 +148,11 @@ export const UsersPage: React.FC = () => {
         `Are you sure you want to delete account "${user.name}" (${user.email})?`
       )
     ) {
-      const success = await userService.deleteUser(user.id);
-      if (success) {
+      const res = await userService.deleteUser(user.id);
+      if (res.success) {
         await loadUsers();
       } else {
-        alert('Failed to delete user.');
+        alert(res.error || 'Failed to delete user.');
       }
     }
   };
