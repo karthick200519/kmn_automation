@@ -15,7 +15,7 @@ import {
   formatTimeAgo,
   getSeverityColorClass,
 } from '../utils/formatters';
-import { Cpu, Edit, Eye, Filter, LayoutGrid, List, X, ShieldCheck, Zap, Activity } from 'lucide-react';
+import { Cpu, Edit, Eye, Filter, LayoutGrid, List, X, ShieldCheck, Zap } from 'lucide-react';
 
 export const MotorsPage: React.FC = () => {
   const navigate = useNavigate();

@@ -14,11 +14,8 @@ export const OverviewPage: React.FC = () => {
   const [motors, setMotors] = useState<CurrentMotorStatus[]>([]);
   const [schedules, setSchedules] = useState<MaintenanceSchedule[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [loading, setLoading] = useState(true);
-
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true);
       const [motorData, scheduleData, alertData] = await Promise.all([
         motorService.getCurrentMotorStatus(),
         scheduleService.getSchedules(),
@@ -27,7 +24,6 @@ export const OverviewPage: React.FC = () => {
       setMotors(motorData);
       setSchedules(scheduleData);
       setAlerts(alertData);
-      setLoading(false);
     };
 
     fetchData();
