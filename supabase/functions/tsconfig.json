@@ -2,11 +2,15 @@
   "compilerOptions": {
     "target": "ESNext",
     "module": "ESNext",
-    "moduleResolution": "bundler",
+    "moduleResolution": "node",
     "lib": ["ESNext", "DOM"],
     "strict": false,
     "noImplicitAny": false,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "npm:*": ["*"]
+    }
   },
   "include": ["**/*.ts"]
 }
