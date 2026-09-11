@@ -36,14 +36,14 @@ export const MotorsPage: React.FC = () => {
   const [editError, setEditError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    fetchMotors();
-  }, []);
-
   const fetchMotors = async () => {
     const data = await motorService.getCurrentMotorStatus();
     setMotors(data);
   };
+
+  useEffect(() => {
+    fetchMotors();
+  }, []);
 
   const filteredMotors = motors.filter((m) => {
     const matchesStatus = filterStatus === 'all' || m.motor_status === filterStatus;

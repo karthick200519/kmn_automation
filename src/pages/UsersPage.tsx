@@ -28,14 +28,14 @@ export const UsersPage: React.FC = () => {
   const [addErrorMsg, setAddErrorMsg] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
   const fetchUsers = async () => {
     const data = await userService.getUsers();
     setUsers(data);
   };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
 
   const handleOpenEdit = (u: Profile) => {
     setEditingUser(u);

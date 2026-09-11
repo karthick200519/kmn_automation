@@ -16,7 +16,7 @@ import {
   formatTimeAgo,
   getSeverityColorClass,
 } from '../utils/formatters';
-import { ArrowLeft, Cpu, Zap, Thermometer, Activity, ShieldAlert, HeartPulse, Wrench } from 'lucide-react';
+import { ArrowLeft, Zap, Activity, Wrench } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
 export const MotorDetailPage: React.FC = () => {

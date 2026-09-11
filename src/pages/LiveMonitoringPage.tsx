@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
 import type { MotorSensorData } from '../types/database';
 import { monitoringService, type TimeRange } from '../services/monitoringService';
@@ -14,7 +14,7 @@ import {
   formatPowerFactor,
   formatTimeAgo,
 } from '../utils/formatters';
-import { Activity, Clock, Zap, Thermometer, Radio, Cpu } from 'lucide-react';
+import { Radio, Cpu } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
 export const LiveMonitoringPage: React.FC = () => {
@@ -22,15 +22,8 @@ export const LiveMonitoringPage: React.FC = () => {
   const [timeRange, setTimeRange] = useState<TimeRange>('15m');
   const [telemetry, setTelemetry] = useState<MotorSensorData[]>([]);
   const [latestData, setLatestData] = useState<MotorSensorData | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
 
-  useEffect(() => {
-    fetchLiveTelemetry();
-    const interval = setInterval(fetchLiveTelemetry, 5000);
-    return () => clearInterval(interval);
-  }, [selectedMotorNum, timeRange]);
-
-  const fetchLiveTelemetry = async () => {
+  const fetchLiveTelemetry = useCallback(async () => {
     const allMotors = await motorService.getCurrentMotorStatus();
     const current = allMotors.find((m) => m.motor_number === selectedMotorNum) || allMotors[0];
 
@@ -41,8 +34,13 @@ export const LiveMonitoringPage: React.FC = () => {
         setLatestData(dataPoints[dataPoints.length - 1]);
       }
     }
-    setLoading(false);
-  };
+  }, [selectedMotorNum, timeRange]);
+
+  useEffect(() => {
+    fetchLiveTelemetry();
+    const interval = setInterval(fetchLiveTelemetry, 5000);
+    return () => clearInterval(interval);
+  }, [fetchLiveTelemetry]);
 
   const formattedChartData = telemetry.map((d) => ({
     time: new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),

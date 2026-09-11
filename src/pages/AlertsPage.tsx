@@ -11,14 +11,14 @@ export const AlertsPage: React.FC = () => {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>('all');
 
-  useEffect(() => {
-    fetchAlerts();
-  }, []);
-
   const fetchAlerts = async () => {
     const data = await alertService.getActiveAlerts();
     setAlerts(data);
   };
+
+  useEffect(() => {
+    fetchAlerts();
+  }, []);
 
   const handleAcknowledge = async (alertId: string) => {
     if (!profile?.id) return;

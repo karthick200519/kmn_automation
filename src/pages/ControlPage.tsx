@@ -13,16 +13,16 @@ export const ControlPage: React.FC = () => {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const fetchGpio = async () => {
+    const data = await controlService.getGpioStatus();
+    setGpio(data);
+  };
+
   useEffect(() => {
     fetchGpio();
     const interval = setInterval(fetchGpio, 3000);
     return () => clearInterval(interval);
   }, []);
-
-  const fetchGpio = async () => {
-    const data = await controlService.getGpioStatus();
-    setGpio(data);
-  };
 
   const handleToggleOutput = async (outputName: 'relay_1' | 'relay_2' | 'relay_3' | 'buzzer', currentState: boolean) => {
     setStatusMessage(null);
