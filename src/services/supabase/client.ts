@@ -15,7 +15,7 @@ export const isSupabaseConfigured = (): boolean => {
   const url = import.meta.env.VITE_SUPABASE_URL;
   const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
   if (!url || !key) return false;
-  if (url.includes('placeholder') || key.includes('placeholderKey') || url.includes('thkphnernixpkclstshd')) return false;
+  if (url.includes('YOUR_SUPABASE_URL') || key.includes('placeholderKey') || key === 'placeholder') return false;
   return true;
 };
 
