@@ -4,7 +4,7 @@ import type { AiPrediction } from '../types/database';
 import { diagnosisService } from '../services/diagnosisService';
 import { FAULT_CLASSES, getFaultClass } from '../config/faultClasses';
 import { formatTimeAgo, getSeverityColorClass } from '../utils/formatters';
-import { Stethoscope, Cpu, ShieldAlert, Filter } from 'lucide-react';
+import { Stethoscope, Filter } from 'lucide-react';
 
 export const FaultDiagnosisPage: React.FC = () => {
   const [predictions, setPredictions] = useState<AiPrediction[]>([]);
@@ -12,13 +12,14 @@ export const FaultDiagnosisPage: React.FC = () => {
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
 
   useEffect(() => {
-    fetchPredictions();
+    let active = true;
+    diagnosisService.getDiagnosisHistory(selectedMotorFilter).then((data) => {
+      if (active) setPredictions(data);
+    });
+    return () => {
+      active = false;
+    };
   }, [selectedMotorFilter]);
-
-  const fetchPredictions = async () => {
-    const data = await diagnosisService.getDiagnosisHistory(selectedMotorFilter);
-    setPredictions(data);
-  };
 
   const filteredPredictions = predictions.filter((p) => {
     if (selectedCategoryFilter === 'all') return true;

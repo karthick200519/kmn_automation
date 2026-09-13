@@ -17,29 +17,28 @@ export const HealthDegradationPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const data = await motorService.getCurrentMotorStatus();
-      setMotors(data);
-    } catch (err) {
-      console.error('Failed to load health/degradation data:', err);
-      setError('Unable to load live machine health data.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadData();
+    let active = true;
+    const poll = () => {
+      motorService.getCurrentMotorStatus().then((data) => {
+        if (active) {
+          setMotors(data);
+          setLoading(false);
+        }
+      }).catch((err) => {
+        console.error('Failed to load health/degradation data:', err);
+        if (active) {
+          setError('Unable to load live machine health data.');
+          setLoading(false);
+        }
+      });
+    };
+    poll();
 
-    const interval = window.setInterval(() => {
-      loadData();
-    }, 5000);
+    const interval = window.setInterval(poll, 5000);
 
     return () => {
+      active = false;
       window.clearInterval(interval);
     };
   }, []);

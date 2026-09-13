@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { MainLayout } from '../components/layout/MainLayout';
 import type { CurrentMotorStatus } from '../types/database';
 import { motorService } from '../services/motorService';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContextDef';
 import {
   formatVoltage,
   formatCurrent,
@@ -11,11 +11,20 @@ import {
   formatVibration,
   formatPower,
   formatFrequency,
-  formatPowerFactor,
   formatTimeAgo,
   getSeverityColorClass,
 } from '../utils/formatters';
-import { Cpu, Edit, Eye, Filter, LayoutGrid, List, X, ShieldCheck, Zap } from 'lucide-react';
+import { Cpu, Edit, Eye, Filter, LayoutGrid, List, X, Zap } from 'lucide-react';
+
+
+const DEFAULT_RATED_SPEC = {
+  rated_voltage: 415,
+  rated_current: 15,
+  rated_power: 11,
+  rated_speed: 1475,
+  rated_frequency: 50,
+  phase: '3-Phase',
+} as const;
 
 export const MotorsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -42,7 +51,13 @@ export const MotorsPage: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchMotors();
+    let active = true;
+    motorService.getCurrentMotorStatus().then((data) => {
+      if (active) setMotors(data);
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const filteredMotors = motors.filter((m) => {
@@ -56,11 +71,11 @@ export const MotorsPage: React.FC = () => {
   const handleOpenEdit = (m: CurrentMotorStatus) => {
     setEditingMotor(m);
     setEditName(m.motor_name);
-    setEditVoltage(m.rated_voltage || 415);
-    setEditCurrent(m.rated_current || 15);
-    setEditPower(m.rated_power || 11);
-    setEditSpeed(m.rated_speed || 1475);
-    setEditFrequency(m.rated_frequency || 50);
+    setEditVoltage(m.rated_voltage ?? DEFAULT_RATED_SPEC.rated_voltage);
+    setEditCurrent(m.rated_current ?? DEFAULT_RATED_SPEC.rated_current);
+    setEditPower(m.rated_power ?? DEFAULT_RATED_SPEC.rated_power);
+    setEditSpeed(m.rated_speed ?? DEFAULT_RATED_SPEC.rated_speed);
+    setEditFrequency(m.rated_frequency ?? DEFAULT_RATED_SPEC.rated_frequency);
     setEditError(null);
   };
 
@@ -90,7 +105,7 @@ export const MotorsPage: React.FC = () => {
 
   return (
     <MainLayout pageTitle="Monitored Motor Fleet">
-      
+
       {/* Page Header Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
         <div>
@@ -100,7 +115,7 @@ export const MotorsPage: React.FC = () => {
 
         {/* View Mode & Filter Controls */}
         <div className="flex items-center space-x-3 text-xs">
-          
+
           {/* Toggle View Mode */}
           <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
             <button
@@ -174,8 +189,12 @@ export const MotorsPage: React.FC = () => {
                       M{m.motor_number}
                     </span>
                     <div>
-                      <h3 className="font-bold text-slate-900 text-base leading-tight">{m.motor_name}</h3>
-                      <p className="text-[11px] text-slate-500">415-V Industrial Induction Motor</p>
+                      <h3 className="font-bold text-slate-900 text-base leading-tight">
+                        {m.motor_name || `Motor ${m.motor_number}`}
+                      </h3>
+                      <p className="text-[11px] text-slate-500">
+                        ID: {m.motor_id} • 415-V Industrial Induction Motor
+                      </p>
                     </div>
                   </div>
                   <span
@@ -211,31 +230,62 @@ export const MotorsPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Real-time Parameters Grid */}
+                {/* Real-time 8-Parameter Grid */}
                 <div className="grid grid-cols-2 gap-2 text-xs py-2 border-t border-slate-100">
                   <div className="p-2 bg-slate-50/50 rounded">
                     <p className="text-[11px] text-slate-500">Voltage</p>
-                    <p className="font-bold text-slate-900 font-mono text-sm">{formatVoltage(m.voltage)}</p>
+                    <p className="font-bold text-slate-900 font-mono text-sm">
+                      {formatVoltage(m.voltage)}
+                    </p>
                   </div>
+
                   <div className="p-2 bg-slate-50/50 rounded">
                     <p className="text-[11px] text-slate-500">Current</p>
-                    <p className="font-bold text-slate-900 font-mono text-sm">{formatCurrent(m.current)}</p>
+                    <p className="font-bold text-slate-900 font-mono text-sm">
+                      {formatCurrent(m.current)}
+                    </p>
                   </div>
+
                   <div className="p-2 bg-slate-50/50 rounded">
                     <p className="text-[11px] text-slate-500">Temperature</p>
-                    <p className="font-bold text-slate-900 font-mono text-sm">{formatTemperature(m.temperature)}</p>
+                    <p className="font-bold text-slate-900 font-mono text-sm">
+                      {formatTemperature(m.temperature)}
+                    </p>
                   </div>
+
                   <div className="p-2 bg-slate-50/50 rounded">
                     <p className="text-[11px] text-slate-500">Vibration RMS</p>
-                    <p className="font-bold text-slate-900 font-mono text-sm">{formatVibration(m.vibration_rms)}</p>
+                    <p className="font-bold text-slate-900 font-mono text-sm">
+                      {formatVibration(m.vibration_rms)}
+                    </p>
                   </div>
+
                   <div className="p-2 bg-slate-50/50 rounded">
                     <p className="text-[11px] text-slate-500">Active Power</p>
-                    <p className="font-bold text-slate-900 font-mono text-sm">{formatPower(m.power)}</p>
+                    <p className="font-bold text-slate-900 font-mono text-sm">
+                      {formatPower(m.power)}
+                    </p>
                   </div>
+
+                  <div className="p-2 bg-slate-50/50 rounded">
+                    <p className="text-[11px] text-slate-500">Energy</p>
+                    <p className="font-bold text-slate-900 font-mono text-sm">
+                      {Number(m.energy ?? 0).toFixed(2)} kWh
+                    </p>
+                  </div>
+
                   <div className="p-2 bg-slate-50/50 rounded">
                     <p className="text-[11px] text-slate-500">Frequency</p>
-                    <p className="font-bold text-slate-900 font-mono text-sm">{formatFrequency(m.frequency)}</p>
+                    <p className="font-bold text-slate-900 font-mono text-sm">
+                      {formatFrequency(m.frequency)}
+                    </p>
+                  </div>
+
+                  <div className="p-2 bg-slate-50/50 rounded">
+                    <p className="text-[11px] text-slate-500">Power Factor</p>
+                    <p className="font-bold text-slate-900 font-mono text-sm">
+                      {Number(m.power_factor ?? 0).toFixed(3)}
+                    </p>
                   </div>
                 </div>
 
@@ -243,7 +293,7 @@ export const MotorsPage: React.FC = () => {
                 <div className="mt-3 pt-3 border-t border-slate-100 text-xs">
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-bold text-slate-700 flex items-center gap-1 text-[11px] uppercase tracking-wider">
-                      <Zap className="w-3.5 h-3.5 text-amber-500" /> Rated Data Specifications
+                      <Zap className="w-3.5 h-3.5 text-amber-500" /> Rated Data Specifications  
                     </span>
                     {role === 'admin' && (
                       <button
@@ -256,28 +306,28 @@ export const MotorsPage: React.FC = () => {
                   </div>
                   <div className="grid grid-cols-3 gap-1.5 text-[11px] bg-amber-50/50 p-2.5 rounded border border-amber-100">
                     <div>
-                      <span className="text-slate-500 block text-[10px]">Rated Volt:</span>
-                      <strong className="text-slate-900 font-mono">{m.rated_voltage || 415} V</strong>
+                      <span className="text-slate-500 block text-[10px]">Rated Volt:</span>     
+                      <strong className="text-slate-900 font-mono">{m.rated_voltage ?? DEFAULT_RATED_SPEC.rated_voltage} V</strong>
                     </div>
                     <div>
-                      <span className="text-slate-500 block text-[10px]">Rated Curr:</span>
-                      <strong className="text-slate-900 font-mono">{m.rated_current || 15.0} A</strong>
+                      <span className="text-slate-500 block text-[10px]">Rated Curr:</span>     
+                      <strong className="text-slate-900 font-mono">{m.rated_current ?? DEFAULT_RATED_SPEC.rated_current} A</strong>
                     </div>
                     <div>
-                      <span className="text-slate-500 block text-[10px]">Rated Power:</span>
-                      <strong className="text-slate-900 font-mono">{m.rated_power || 11.0} kW</strong>
+                      <span className="text-slate-500 block text-[10px]">Rated Power:</span>    
+                      <strong className="text-slate-900 font-mono">{m.rated_power ?? DEFAULT_RATED_SPEC.rated_power} kW</strong>
                     </div>
                     <div>
-                      <span className="text-slate-500 block text-[10px]">Rated Speed:</span>
-                      <strong className="text-slate-900 font-mono">{m.rated_speed || 1475} RPM</strong>
+                      <span className="text-slate-500 block text-[10px]">Rated Speed:</span>    
+                      <strong className="text-slate-900 font-mono">{m.rated_speed ?? DEFAULT_RATED_SPEC.rated_speed} RPM</strong>
                     </div>
                     <div>
-                      <span className="text-slate-500 block text-[10px]">Rated Freq:</span>
-                      <strong className="text-slate-900 font-mono">{m.rated_frequency || 50} Hz</strong>
+                      <span className="text-slate-500 block text-[10px]">Rated Freq:</span>     
+                      <strong className="text-slate-900 font-mono">{m.rated_frequency ?? DEFAULT_RATED_SPEC.rated_frequency} Hz</strong>
                     </div>
                     <div>
                       <span className="text-slate-500 block text-[10px]">Phase:</span>
-                      <strong className="text-slate-900 font-mono">3-Phase</strong>
+                      <strong className="text-slate-900 font-mono">{DEFAULT_RATED_SPEC.phase}</strong>
                     </div>
                   </div>
                 </div>
@@ -301,7 +351,7 @@ export const MotorsPage: React.FC = () => {
         </div>
       ) : (
         /* Table Format View */
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"> 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
@@ -313,7 +363,10 @@ export const MotorsPage: React.FC = () => {
                   <th className="py-3 px-3 text-right">Temp</th>
                   <th className="py-3 px-3 text-right">Vibration</th>
                   <th className="py-3 px-3 text-right">Power</th>
-                  <th className="py-3 px-3 text-right">Rated V / I</th>
+                  <th className="py-3 px-3 text-right">Energy</th>
+                  <th className="py-3 px-3 text-right">Frequency</th>
+                  <th className="py-3 px-3 text-right">Power Factor</th>
+                  <th className="py-3 px-3 text-right">Rated V / I / P</th>
                   <th className="py-3 px-3 text-center">Health</th>
                   <th className="py-3 px-3">Severity</th>
                   <th className="py-3 px-4 text-center">Actions</th>
@@ -321,13 +374,18 @@ export const MotorsPage: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
                 {filteredMotors.map((m) => (
-                  <tr key={m.motor_id} className="hover:bg-slate-50/80 transition-colors">
+                  <tr key={m.motor_id} className="hover:bg-slate-50/80 transition-colors">      
                     <td className="py-3 px-4 font-bold text-slate-900">
                       <div className="flex items-center space-x-2">
                         <span className="w-6 h-6 bg-slate-100 text-slate-700 rounded flex items-center justify-center text-[10px] font-bold border border-slate-300">
                           M{m.motor_number}
                         </span>
-                        <span>{m.motor_name}</span>
+                        <div className="min-w-0">
+                          <span className="block">{m.motor_name}</span>
+                          <span className="block text-[10px] text-slate-500 font-mono truncate">
+                            {m.motor_id}
+                          </span>
+                        </div>
                       </div>
                     </td>
                     <td className="py-3 px-3">
@@ -340,7 +398,14 @@ export const MotorsPage: React.FC = () => {
                     <td className="py-3 px-3 text-right font-mono">{formatTemperature(m.temperature)}</td>
                     <td className="py-3 px-3 text-right font-mono">{formatVibration(m.vibration_rms)}</td>
                     <td className="py-3 px-3 text-right font-mono">{formatPower(m.power)}</td>
-                    <td className="py-3 px-3 text-right font-mono text-slate-600">{m.rated_voltage || 415}V / {m.rated_current || 15}A</td>
+                    <td className="py-3 px-3 text-right font-mono">{Number(m.energy ?? 0).toFixed(2)} kWh</td>
+                    <td className="py-3 px-3 text-right font-mono">{formatFrequency(m.frequency)}</td>
+                    <td className="py-3 px-3 text-right font-mono">{Number(m.power_factor ?? 0).toFixed(3)}</td>
+                    <td className="py-3 px-3 text-right font-mono text-slate-600">
+                      {m.rated_voltage ?? DEFAULT_RATED_SPEC.rated_voltage}V /
+                      {m.rated_current ?? DEFAULT_RATED_SPEC.rated_current}A /
+                      {m.rated_power ?? DEFAULT_RATED_SPEC.rated_power}kW
+                    </td>
                     <td className="py-3 px-3 text-center font-bold">
                       <span className={`px-2 py-0.5 rounded-full text-xs ${
                         (m.health_index || 0) >= 80 ? 'bg-emerald-100 text-emerald-800' : (m.health_index || 0) >= 50 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'
@@ -385,11 +450,11 @@ export const MotorsPage: React.FC = () => {
       {editingMotor && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4">
-            
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">  
               <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
                 <Cpu className="w-4 h-4 text-blue-600" />
-                <span>Edit Rated Specifications: Motor {editingMotor.motor_number}</span>
+                <span>Edit Rated Specifications: Motor {editingMotor.motor_number}</span>       
               </h3>
               <button onClick={() => setEditingMotor(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X className="w-4 h-4" />
@@ -404,7 +469,7 @@ export const MotorsPage: React.FC = () => {
               )}
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Motor Name</label>
+                <label className="block font-semibold text-slate-700 mb-1">Motor Name</label>   
                 <input
                   type="text"
                   required
@@ -503,4 +568,3 @@ export const MotorsPage: React.FC = () => {
     </MainLayout>
   );
 };
-

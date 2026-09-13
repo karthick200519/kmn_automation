@@ -2,38 +2,28 @@ import React, { useEffect, useState } from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
 import type { DataSourceMode } from '../types/database';
 import { settingsService } from '../services/settingsService';
-import { useAuth } from '../context/AuthContext';
-import { Settings as SettingsIcon, Database, Check, AlertCircle, Shield } from 'lucide-react';
+import { useAuth } from '../context/AuthContextDef';
+import { Settings as SettingsIcon, Database, Check, AlertCircle } from 'lucide-react';
 
 export const SettingsPage: React.FC = () => {
   const { profile } = useAuth();
   const [mode, setMode] = useState<DataSourceMode>('demo');
-  const [liveAvailable, setLiveAvailable] = useState<boolean>(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
+    const fetchMode = async () => {
+      const currentMode = await settingsService.getDataSourceMode();
+      setMode(currentMode);
+    };
     fetchMode();
   }, []);
 
-  const fetchMode = async () => {
-    const currentMode = await settingsService.getDataSourceMode();
-    setMode(currentMode);
-  };
-
   const handleToggleMode = async (newMode: DataSourceMode) => {
     setMessage(null);
-    setIsSaving(true);
 
-    const result = await settingsService.setDataSourceMode(newMode, profile?.id);
-    setIsSaving(false);
+    await settingsService.setDataSourceMode(newMode, profile?.id);
     setMode(newMode);
-
-    if (newMode === 'live' && !liveAvailable) {
-      setMessage('Live sensor data is currently unavailable.');
-    } else {
-      setMessage(`Operational data source updated to ${newMode.toUpperCase()} mode.`);
-    }
+    setMessage(`Operational data source updated to ${newMode.toUpperCase()} mode.`);
   };
 
   return (

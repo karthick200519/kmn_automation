@@ -53,7 +53,7 @@ export const controlService = {
     });
 
     if (!validation.success) {
-      return { success: false, error: validation.error.errors[0]?.message || 'Invalid control command parameters.' };
+      return { success: false, error: validation.error.issues[0]?.message || 'Invalid control command parameters.' };
     }
 
     if (!isSupabaseConfigured()) {

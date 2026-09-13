@@ -112,6 +112,7 @@ export interface MaintenanceSchedule {
   assigned_to: string | null;
   priority: SchedulePriority;
   start_time: string;
+  scheduled_start?: string;
   end_time: string | null;
   status: ScheduleStatus;
   notes: string | null;
@@ -222,6 +223,7 @@ export interface CurrentMotorStatus {
   health_index: number | null;
   health_status: HealthStatus | null;
   degradation_status: DegradationStatus | null;
+  degradation_rate?: number | null;
   maintenance_decision: MaintenanceDecision | null;
   maintenance_recommendation: string | null;
 }

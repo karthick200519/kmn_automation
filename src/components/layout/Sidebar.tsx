@@ -16,7 +16,7 @@ import {
   Settings as SettingsIcon,
   X,
 } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContextDef';
 import type { UserRole } from '../../types/database';
 
 interface NavItem {

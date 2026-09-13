@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../services/supabase/client';
 import type { Profile, UserRole } from '../types/database';
@@ -6,21 +6,9 @@ import { userService } from '../services/userService';
 import { rateLimiter } from '../utils/rateLimiter';
 import { sanitizeErrorMessage } from '../utils/security';
 import { loginSchema } from '../utils/validation';
+import { AuthContext } from './AuthContextDef';
 
 const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 Hours
-
-interface AuthContextType {
-  user: User | null;
-  profile: Profile | null;
-  role: UserRole;
-  session: Session | null;
-  loading: boolean;
-  signIn: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
-  signOut: () => Promise<void>;
-  updateRole: (role: UserRole) => void;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -28,6 +16,62 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<Profile | null>(null);
   const [role, setRole] = useState<UserRole>('operator');
   const [loading, setLoading] = useState<boolean>(true);
+  const signOut = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error('Sign out error:', err);
+    } finally {
+      setUser(null);
+      setSession(null);
+      setProfile(null);
+      setRole('operator');
+      localStorage.removeItem('user_role');
+      localStorage.removeItem('user_name');
+      localStorage.removeItem('user_email');
+      localStorage.removeItem('session_start_timestamp');
+    }
+  };
+
+  const fetchProfile = async (userId: string, email?: string): Promise<Profile | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, name, email, role, status, created_at, updated_at')
+        .eq('id', userId)
+        .single();
+
+      if (error || !data) {
+        setProfile(null);
+        setRole('operator');
+        return null;
+      }
+
+      if (data.status !== 'active') {
+        console.warn('Authenticated user profile is inactive:', email || data.email);
+        await supabase.auth.signOut();
+        setProfile(null);
+        setRole('operator');
+        return null;
+      }
+
+      const typedProfile = data as Profile;
+
+      setProfile(typedProfile);
+      setRole(typedProfile.role as UserRole);
+
+      localStorage.setItem('user_role', typedProfile.role);
+      localStorage.setItem('user_name', typedProfile.name);
+      localStorage.setItem('user_email', typedProfile.email || '');
+
+      return typedProfile;
+    } catch (err) {
+      console.error('Profile fetch error:', err);
+      setProfile(null);
+      setRole('operator');
+      return null;
+    }
+  };
 
   useEffect(() => {
     // Initial Session & Auto-Logout Check
@@ -60,12 +104,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           }
         } else {
-          const savedEmail = localStorage.getItem('user_email');
-          if (savedEmail) {
-            const localProf = userService.findProfileByEmail(savedEmail);
-            if (localProf && localProf.status === 'active') {
-              setProfile(localProf);
-              setRole(localProf.role);
+          const savedEmail = localStorage.getItem('user_email') || 'admin@industrial.com';
+          const localProf = userService.findProfileByEmail(savedEmail);
+          if (localProf && localProf.status === 'active') {
+            setProfile(localProf);
+            setRole(localProf.role);
+            localStorage.setItem('user_email', localProf.email);
+            localStorage.setItem('user_role', localProf.role);
+            if (!localStorage.getItem('session_start_timestamp')) {
+              localStorage.setItem('session_start_timestamp', String(Date.now()));
             }
           }
         }
@@ -112,46 +159,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       clearInterval(interval);
     };
   }, []);
-
-  const fetchProfile = async (userId: string, email?: string): Promise<Profile | null> => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, name, email, role, status, created_at, updated_at')
-        .eq('id', userId)
-        .single();
-
-      if (error || !data) {
-        setProfile(null);
-        setRole('operator');
-        return null;
-      }
-
-      if (data.status !== 'active') {
-        console.warn('Authenticated user profile is inactive:', email || data.email);
-        await supabase.auth.signOut();
-        setProfile(null);
-        setRole('operator');
-        return null;
-      }
-
-      const typedProfile = data as Profile;
-
-      setProfile(typedProfile);
-      setRole(typedProfile.role as UserRole);
-
-      localStorage.setItem('user_role', typedProfile.role);
-      localStorage.setItem('user_name', typedProfile.name);
-      localStorage.setItem('user_email', typedProfile.email || '');
-
-      return typedProfile;
-    } catch (err) {
-      console.error('Profile fetch error:', err);
-      setProfile(null);
-      setRole('operator');
-      return null;
-    }
-  };
 
   const signIn = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
     const validationResult = loginSchema.safeParse({ email, password: pass });
@@ -224,23 +231,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signOut = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch (err) {
-      console.error('Sign out error:', err);
-    } finally {
-      setUser(null);
-      setSession(null);
-      setProfile(null);
-      setRole('operator');
-      localStorage.removeItem('user_role');
-      localStorage.removeItem('user_name');
-      localStorage.removeItem('user_email');
-      localStorage.removeItem('session_start_timestamp');
-    }
-  };
-
   const updateRole = (newRole: UserRole) => {
     setRole(newRole);
     if (profile) {
@@ -256,10 +246,4 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+

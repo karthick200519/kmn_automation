@@ -1,4 +1,4 @@
-import type { CurrentMotorStatus, MaintenanceSchedule, Alert, ControlCommand, GpioStatus, SystemLog, Profile, SystemSetting } from '../types/database';
+import type { CurrentMotorStatus, MaintenanceSchedule, Alert, GpioStatus, SystemLog, Profile } from '../types/database';
 
 export const MOCK_PROFILES: Profile[] = [
   {

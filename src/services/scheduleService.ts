@@ -44,7 +44,7 @@ export const scheduleService = {
     // 1. Zod Schema Validation
     const validation = scheduleSchema.safeParse(schedule);
     if (!validation.success) {
-      return { success: false, error: validation.error.errors[0]?.message || 'Invalid schedule data.' };
+      return { success: false, error: validation.error.issues[0]?.message || 'Invalid schedule data.' };
     }
 
     if (!isSupabaseConfigured()) {

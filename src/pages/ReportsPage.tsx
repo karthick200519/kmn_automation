@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
 import { exportToCSV } from '../utils/export';
-import { FileText, Download, Printer, Calendar, FileCode } from 'lucide-react';
-import { MOCK_MOTORS, MOCK_ALERTS, MOCK_LOGS } from '../services/mockData';
+import { FileText, Download, Printer, Calendar, FileCode } from 'lucide-react'; 
+import { MOCK_MOTORS, MOCK_ALERTS, MOCK_LOGS } from '../services/mockData';     
 
 export const ReportsPage: React.FC = () => {
-  const [reportType, setReportType] = useState<string>('sensor_monitoring');
+  const [reportType, setReportType] = useState<string>('sensor_monitoring');    
   const [selectedMotor, setSelectedMotor] = useState<string>('all');
-  const [dataSourceFilter, setDataSourceFilter] = useState<string>('all');
+  const [dataSourceFilter, setDataSourceFilter] = useState<string>('all');      
   const [timeframe, setTimeframe] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('daily');
 
   const timeframeLabels: Record<string, string> = {
@@ -19,7 +19,7 @@ export const ReportsPage: React.FC = () => {
 
   const getFilteredMotors = () => {
     if (selectedMotor === 'all') return MOCK_MOTORS;
-    return MOCK_MOTORS.filter((m) => m.motor_number === Number(selectedMotor));
+    return MOCK_MOTORS.filter((m) => m.motor_number === Number(selectedMotor)); 
   };
 
   const handleExportCSV = () => {
@@ -27,7 +27,7 @@ export const ReportsPage: React.FC = () => {
     const filteredMotors = getFilteredMotors();
 
     if (reportType === 'sensor_monitoring' || reportType === 'motor_condition') {
-      const headers = ['Timeframe', 'Motor Number', 'Motor Name', 'Status', 'Voltage (V)', 'Current (A)', 'Temp (°C)', 'Vibration (g)', 'Power (kW)', 'Health Index', 'Source'];
+      const headers = ['Timeframe', 'Motor Number', 'Motor Name', 'Status', 'Voltage (V)', 'Current (A)', 'Temp (Â°C)', 'Vibration (g)', 'Power (kW)', 'Health Index', 'Source'];
       const rows = filteredMotors.map((m) => [
         timeframeLabels[timeframe],
         m.motor_number,
@@ -41,7 +41,7 @@ export const ReportsPage: React.FC = () => {
         m.health_index || 95,
         m.sensor_source || 'sample',
       ]);
-      exportToCSV(`KMN_Report_${reportType}_${timeTag}`, headers, rows);
+      exportToCSV(`KMN_Report_${reportType}_${timeTag}`, headers, rows);        
     } else if (reportType === 'alerts') {
       const headers = ['Timeframe', 'Motor Number', 'Title', 'Message', 'Severity', 'Status', 'Timestamp'];
       const rows = MOCK_ALERTS.map((a) => [timeframeLabels[timeframe], a.motor_number || 1, a.title, a.message, a.severity, a.status, a.timestamp]);
@@ -49,7 +49,7 @@ export const ReportsPage: React.FC = () => {
     } else {
       const headers = ['Timeframe', 'Timestamp', 'Event Type', 'Severity', 'Message'];
       const rows = MOCK_LOGS.map((l) => [timeframeLabels[timeframe], l.timestamp, l.event_type, l.severity, l.message]);
-      exportToCSV(`KMN_Log_Report_${reportType}_${timeTag}`, headers, rows);
+      exportToCSV(`KMN_Log_Report_${reportType}_${timeTag}`, headers, rows);    
     }
   };
 
@@ -81,7 +81,7 @@ export const ReportsPage: React.FC = () => {
 
   return (
     <MainLayout pageTitle="Engineering Reports & Export Center">
-      
+
       {/* Top Controls Bar */}
       <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
@@ -95,7 +95,7 @@ export const ReportsPage: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+          <div className="flex items-center space-x-2 flex-wrap gap-y-2">       
             <button
               onClick={handleExportCSV}
               className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-sm transition-colors flex items-center gap-1.5 cursor-pointer"
@@ -124,7 +124,7 @@ export const ReportsPage: React.FC = () => {
 
         {/* Report Criteria & Timeframe Selection Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-          
+
           {/* Timeframe selector: Daily, Weekly, Monthly, Yearly */}
           <div>
             <label className="block font-bold text-slate-900 mb-1 flex items-center gap-1">
@@ -136,10 +136,10 @@ export const ReportsPage: React.FC = () => {
               onChange={(e) => setTimeframe(e.target.value as any)}
               className="w-full px-3 py-2 border border-slate-300 rounded font-bold text-blue-700 bg-blue-50/50 cursor-pointer focus:ring-1 focus:ring-blue-500"
             >
-              <option value="daily">Daily Report (Last 24 Hours)</option>
-              <option value="weekly">Weekly Report (Last 7 Days)</option>
+              <option value="daily">Daily Report (Last 24 Hours)</option>       
+              <option value="weekly">Weekly Report (Last 7 Days)</option>       
               <option value="monthly">Monthly Report (Last 30 Days)</option>
-              <option value="yearly">Yearly Report (Last 365 Days)</option>
+              <option value="yearly">Yearly Report (Last 365 Days)</option>     
             </select>
           </div>
 
@@ -151,8 +151,8 @@ export const ReportsPage: React.FC = () => {
               className="w-full px-3 py-2 border border-slate-300 rounded font-semibold text-slate-800 cursor-pointer"
             >
               <option value="sensor_monitoring">Sensor Telemetry Monitoring</option>
-              <option value="motor_condition">Motor Condition Summary</option>
-              <option value="fault_diagnosis">Fault Diagnosis History</option>
+              <option value="motor_condition">Motor Condition Summary</option>  
+              <option value="fault_diagnosis">Fault Diagnosis History</option>  
               <option value="health">Machine Health Analytics</option>
               <option value="alerts">Alerts & Alarm History</option>
               <option value="control">Control Command Audit</option>
@@ -191,7 +191,7 @@ export const ReportsPage: React.FC = () => {
 
       {/* Timeframe Quick Tabs */}
       <div className="flex items-center space-x-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200 text-xs font-bold">
-        {(['daily', 'weekly', 'monthly', 'yearly'] as const).map((tf) => (
+        {(['daily', 'weekly', 'monthly', 'yearly'] as const).map((tf) => (      
           <button
             key={tf}
             onClick={() => setTimeframe(tf)}
@@ -206,7 +206,7 @@ export const ReportsPage: React.FC = () => {
 
       {/* Printable Report Preview Card */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-4 print:shadow-none print:border-none">
-        
+
         <div className="flex items-center justify-between border-b border-slate-200 pb-4 flex-wrap gap-2">
           <div>
             <h3 className="font-bold text-slate-900 text-lg uppercase tracking-tight flex items-center gap-2">
@@ -246,11 +246,11 @@ export const ReportsPage: React.FC = () => {
                 <tr key={m.motor_id}>
                   <td className="py-2.5 px-3 font-bold text-slate-900">{m.motor_name}</td>
                   <td className="py-2.5 px-3 capitalize font-bold text-slate-800">{m.motor_status}</td>
-                  <td className="py-2.5 px-3 font-mono">{m.voltage} V</td>
-                  <td className="py-2.5 px-3 font-mono">{m.current} A</td>
-                  <td className="py-2.5 px-3 font-mono">{m.temperature} °C</td>
+                  <td className="py-2.5 px-3 font-mono">{m.voltage} V</td>      
+                  <td className="py-2.5 px-3 font-mono">{m.current} A</td>      
+                  <td className="py-2.5 px-3 font-mono">{m.temperature} Â°C</td>
                   <td className="py-2.5 px-3 font-mono">{m.vibration_rms} g</td>
-                  <td className="py-2.5 px-3 font-mono">{m.power} kW</td>
+                  <td className="py-2.5 px-3 font-mono">{m.power} kW</td>       
                   <td className="py-2.5 px-3 font-bold">{m.health_index} / 100</td>
                   <td className="py-2.5 px-3 font-semibold text-blue-700 capitalize">{timeframe}</td>
                 </tr>

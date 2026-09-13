@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
 import type { MaintenanceSchedule } from '../types/database';
 import { scheduleService } from '../services/scheduleService';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContextDef';
 import { getSeverityColorClass } from '../utils/formatters';
 import { Calendar as CalendarIcon, List, Plus, Trash2, X, Clock } from 'lucide-react';
 
@@ -20,8 +20,8 @@ export const SchedulePage: React.FC = () => {
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<any>('medium');
   const [assignedToName, setAssignedToName] = useState('Sarah Chen (Engineer)');
-  const [startTime, setStartTime] = useState(new Date(Date.now() + 86400000).toISOString().slice(0, 16));
-  const [endTime, setEndTime] = useState(new Date(Date.now() + 93600000).toISOString().slice(0, 16));
+  const [startTime, setStartTime] = useState(() => new Date(Date.now() + 86400000).toISOString().slice(0, 16));
+  const [endTime, setEndTime] = useState(() => new Date(Date.now() + 93600000).toISOString().slice(0, 16));
   const [status, setStatus] = useState<any>('scheduled');
   const [notes, setNotes] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
@@ -33,7 +33,13 @@ export const SchedulePage: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchSchedules();
+    let active = true;
+    scheduleService.getSchedules().then((data) => {
+      if (active) setSchedules(data);
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleOpenCreate = () => {
