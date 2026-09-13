@@ -3,6 +3,11 @@ import type { MotorSensorData } from '../types/database';
 
 export type TimeRange = '1m' | '5m' | '15m' | '1h' | '24h' | 'custom';
 
+export type HealthHistoryPoint = {
+  timestamp: string;
+  health_index: number;
+};
+
 export const monitoringService = {
   /**
    * Get historical/time-series telemetry for a motor.
@@ -74,7 +79,6 @@ export const monitoringService = {
 
   /**
    * Get the newest telemetry record for the selected motor.
-   * This is used for the live-value cards.
    */
   async getLatestTelemetry(
     motorId: string
@@ -97,5 +101,35 @@ export const monitoringService = {
     }
 
     return data as MotorSensorData | null;
+  },
+
+  /**
+   * Get historical machine-health values for a motor.
+   * Used by the Overview health-trend chart.
+   */
+  async getHealthHistory(
+    motorId: string,
+    limit = 30
+  ): Promise<HealthHistoryPoint[]> {
+    if (!isSupabaseConfigured()) {
+      throw new Error('Supabase is not configured.');
+    }
+
+    const { data, error } = await supabase
+      .from('machine_health')
+      .select('timestamp, health_index')
+      .eq('motor_id', motorId)
+      .order('timestamp', { ascending: true })
+      .limit(limit);
+
+    if (error) {
+      console.error('Health history query error:', error);
+      throw new Error(error.message);
+    }
+
+    return (data ?? []).map((row) => ({
+      timestamp: row.timestamp,
+      health_index: Number(row.health_index ?? 0),
+    }));
   },
 };
