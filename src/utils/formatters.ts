@@ -25,7 +25,7 @@ export const formatVibration = (vib: number | null | undefined): string => {
 
 export const formatPower = (p: number | null | undefined): string => {
   if (p === null || p === undefined) return 'N/A';
-  return `${p.toFixed(2)} kW`;
+  return `${(p / 1000).toFixed(2)} kW`;
 };
 
 export const formatEnergy = (e: number | null | undefined): string => {
