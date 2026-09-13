@@ -4,6 +4,9 @@ import type { MotorSensorData } from '../types/database';
 export type TimeRange = '1m' | '5m' | '15m' | '1h' | '24h' | 'custom';
 
 export const monitoringService = {
+  /**
+   * Get historical/time-series telemetry for a motor.
+   */
   async getTimeSeriesData(
     motorId: string,
     range: TimeRange = '15m',
@@ -16,18 +19,32 @@ export const monitoringService = {
 
     let fromDate = new Date();
 
-    if (range === '1m') {
-      fromDate.setMinutes(fromDate.getMinutes() - 1);
-    } else if (range === '5m') {
-      fromDate.setMinutes(fromDate.getMinutes() - 5);
-    } else if (range === '15m') {
-      fromDate.setMinutes(fromDate.getMinutes() - 15);
-    } else if (range === '1h') {
-      fromDate.setHours(fromDate.getHours() - 1);
-    } else if (range === '24h') {
-      fromDate.setHours(fromDate.getHours() - 24);
-    } else if (range === 'custom' && customFrom) {
-      fromDate = new Date(customFrom);
+    switch (range) {
+      case '1m':
+        fromDate.setMinutes(fromDate.getMinutes() - 1);
+        break;
+
+      case '5m':
+        fromDate.setMinutes(fromDate.getMinutes() - 5);
+        break;
+
+      case '15m':
+        fromDate.setMinutes(fromDate.getMinutes() - 15);
+        break;
+
+      case '1h':
+        fromDate.setHours(fromDate.getHours() - 1);
+        break;
+
+      case '24h':
+        fromDate.setHours(fromDate.getHours() - 24);
+        break;
+
+      case 'custom':
+        if (customFrom) {
+          fromDate = new Date(customFrom);
+        }
+        break;
     }
 
     let query = supabase
@@ -48,9 +65,37 @@ export const monitoringService = {
     const { data, error } = await query;
 
     if (error) {
+      console.error('Telemetry query error:', error);
       throw new Error(error.message);
     }
 
     return (data ?? []) as MotorSensorData[];
+  },
+
+  /**
+   * Get the newest telemetry record for the selected motor.
+   * This is used for the live-value cards.
+   */
+  async getLatestTelemetry(
+    motorId: string
+  ): Promise<MotorSensorData | null> {
+    if (!isSupabaseConfigured()) {
+      throw new Error('Supabase is not configured.');
+    }
+
+    const { data, error } = await supabase
+      .from('motor_sensor_data')
+      .select('*')
+      .eq('motor_id', motorId)
+      .order('timestamp', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Latest telemetry query error:', error);
+      throw new Error(error.message);
+    }
+
+    return data as MotorSensorData | null;
   },
 };

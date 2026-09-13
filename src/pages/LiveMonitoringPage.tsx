@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
 import type { MotorSensorData } from '../types/database';
 import { monitoringService, type TimeRange } from '../services/monitoringService';
-import { motorService } from '../services/motorService';
+import { supabase } from '../services/supabase/client';
 import {
   formatVoltage,
   formatCurrent,
@@ -15,7 +15,15 @@ import {
   formatTimeAgo,
 } from '../utils/formatters';
 import { Radio, Cpu } from 'lucide-react';
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from 'recharts';
 
 export const LiveMonitoringPage: React.FC = () => {
   const [selectedMotorNum, setSelectedMotorNum] = useState<number>(1);
@@ -23,27 +31,68 @@ export const LiveMonitoringPage: React.FC = () => {
   const [telemetry, setTelemetry] = useState<MotorSensorData[]>([]);
   const [latestData, setLatestData] = useState<MotorSensorData | null>(null);
 
-  const fetchLiveTelemetry = useCallback(async () => {
-    const allMotors = await motorService.getCurrentMotorStatus();
-    const current = allMotors.find((m) => m.motor_number === selectedMotorNum) || allMotors[0];
+const fetchLiveTelemetry = useCallback(async () => {
+  try {
+    const { data: motors, error: motorsError } = await supabase
+      .from('motors')
+      .select('id, motor_number')
+      .order('motor_number', { ascending: true });
 
-    if (current) {
-      const dataPoints = await monitoringService.getTimeSeriesData(current.motor_id, timeRange);
-      setTelemetry(dataPoints);
-      if (dataPoints.length > 0) {
-        setLatestData(dataPoints[dataPoints.length - 1]);
-      }
+    if (motorsError) {
+      console.error('Motor lookup error:', motorsError);
+      setTelemetry([]);
+      setLatestData(null);
+      return;
     }
-  }, [selectedMotorNum, timeRange]);
+
+    const selectedMotor = motors?.find(
+      (motor) => motor.motor_number === selectedMotorNum
+    );
+
+    if (!selectedMotor) {
+      console.error(`Motor ${selectedMotorNum} not found.`);
+      setTelemetry([]);
+      setLatestData(null);
+      return;
+    }
+
+    // Get chart data.
+    const dataPoints = await monitoringService.getTimeSeriesData(
+      selectedMotor.id,
+      timeRange
+    );
+
+    setTelemetry(dataPoints);
+
+    // Get the newest record independently of the chart timeframe.
+    const latest = await monitoringService.getLatestTelemetry(
+      selectedMotor.id
+    );
+
+    setLatestData(latest);
+  } catch (error) {
+    console.error('Live telemetry error:', error);
+    setTelemetry([]);
+    setLatestData(null);
+  }
+}, [selectedMotorNum, timeRange]);
 
   useEffect(() => {
     fetchLiveTelemetry();
-    const interval = setInterval(fetchLiveTelemetry, 5000);
+
+    const interval = setInterval(() => {
+      fetchLiveTelemetry();
+    }, 5000);
+
     return () => clearInterval(interval);
   }, [fetchLiveTelemetry]);
 
   const formattedChartData = telemetry.map((d) => ({
-    time: new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    time: new Date(d.timestamp).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }),
     Voltage: d.voltage,
     Current: d.current,
     Temperature: d.temperature,
@@ -56,13 +105,14 @@ export const LiveMonitoringPage: React.FC = () => {
 
   return (
     <MainLayout pageTitle="Real-Time Telemetry & 8-Parameter Analytics">
-      
       {/* Top Selector & Time Range Bar */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-        
         {/* Motor Selector */}
         <div className="flex items-center space-x-3">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Motor:</span>
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            Select Motor:
+          </span>
+
           <div className="flex items-center space-x-2">
             {[1, 2, 3].map((num) => (
               <button
@@ -83,7 +133,10 @@ export const LiveMonitoringPage: React.FC = () => {
 
         {/* Time Range Selector */}
         <div className="flex items-center space-x-2">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1">Timeframe:</span>
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1">
+            Timeframe:
+          </span>
+
           {(['1m', '5m', '15m', '1h', '24h'] as TimeRange[]).map((r) => (
             <button
               key={r}
@@ -98,72 +151,116 @@ export const LiveMonitoringPage: React.FC = () => {
             </button>
           ))}
         </div>
-
       </div>
 
       {/* Freshness & Data Quality Badge Bar */}
       <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg flex items-center justify-between text-xs text-emerald-800 font-medium">
         <div className="flex items-center space-x-2">
           <Radio className="w-4 h-4 text-emerald-600 animate-pulse" />
-          <span>Live Stream Active — Modbus RTU telemetry sampling at 1000ms</span>
+          <span>
+            Live Stream Active — Telemetry refresh every 5 seconds
+          </span>
         </div>
+
         <div className="flex items-center space-x-4">
-          <span>Data Quality: <strong>Valid</strong></span>
-          <span>Last Received: <strong>{formatTimeAgo(latestData?.timestamp)}</strong></span>
+          <span>
+            Data Quality:{' '}
+            <strong>
+              {latestData?.data_quality || 'No Data'}
+            </strong>
+          </span>
+
+          <span>
+            Last Received:{' '}
+            <strong>
+              {formatTimeAgo(latestData?.timestamp)}
+            </strong>
+          </span>
         </div>
       </div>
 
       {/* 8 Key Parameter Stat Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-        
         <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-[10px] font-bold text-slate-400 uppercase">Voltage</p>
-          <p className="text-base font-black font-mono text-slate-900 mt-1">{formatVoltage(latestData?.voltage)}</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase">
+            Voltage
+          </p>
+          <p className="text-base font-black font-mono text-slate-900 mt-1">
+            {formatVoltage(latestData?.voltage)}
+          </p>
         </div>
 
         <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-[10px] font-bold text-slate-400 uppercase">Current</p>
-          <p className="text-base font-black font-mono text-slate-900 mt-1">{formatCurrent(latestData?.current)}</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase">
+            Current
+          </p>
+          <p className="text-base font-black font-mono text-slate-900 mt-1">
+            {formatCurrent(latestData?.current)}
+          </p>
         </div>
 
         <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-[10px] font-bold text-slate-400 uppercase">Temp</p>
-          <p className="text-base font-black font-mono text-slate-900 mt-1">{formatTemperature(latestData?.temperature)}</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase">
+            Temp
+          </p>
+          <p className="text-base font-black font-mono text-slate-900 mt-1">
+            {formatTemperature(latestData?.temperature)}
+          </p>
         </div>
 
         <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-[10px] font-bold text-slate-400 uppercase">Vibration</p>
-          <p className="text-base font-black font-mono text-slate-900 mt-1">{formatVibration(latestData?.vibration_rms)}</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase">
+            Vibration
+          </p>
+          <p className="text-base font-black font-mono text-slate-900 mt-1">
+            {formatVibration(latestData?.vibration_rms)}
+          </p>
         </div>
 
         <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-[10px] font-bold text-slate-400 uppercase">Power</p>
-          <p className="text-base font-black font-mono text-slate-900 mt-1">{formatPower(latestData?.power)}</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase">
+            Power
+          </p>
+          <p className="text-base font-black font-mono text-slate-900 mt-1">
+            {formatPower(latestData?.power)}
+          </p>
         </div>
 
         <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-[10px] font-bold text-slate-400 uppercase">Energy</p>
-          <p className="text-base font-black font-mono text-slate-900 mt-1">{formatEnergy(latestData?.energy)}</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase">
+            Energy
+          </p>
+          <p className="text-base font-black font-mono text-slate-900 mt-1">
+            {formatEnergy(latestData?.energy)}
+          </p>
         </div>
 
         <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-[10px] font-bold text-slate-400 uppercase">Frequency</p>
-          <p className="text-base font-black font-mono text-slate-900 mt-1">{formatFrequency(latestData?.frequency)}</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase">
+            Frequency
+          </p>
+          <p className="text-base font-black font-mono text-slate-900 mt-1">
+            {formatFrequency(latestData?.frequency)}
+          </p>
         </div>
 
         <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-[10px] font-bold text-slate-400 uppercase">Power Factor</p>
-          <p className="text-base font-black font-mono text-slate-900 mt-1">{formatPowerFactor(latestData?.power_factor)}</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase">
+            Power Factor
+          </p>
+          <p className="text-base font-black font-mono text-slate-900 mt-1">
+            {formatPowerFactor(latestData?.power_factor)}
+          </p>
         </div>
-
       </div>
 
-      {/* Grid of 8 Parameter Time-Series Charts */}
+      {/* 8 Parameter Time-Series Charts */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        
-        {/* 1. Voltage vs Time */}
+        {/* Voltage */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <h4 className="text-xs font-bold text-slate-800 mb-2 uppercase">1. Voltage (V) vs Time</h4>
+          <h4 className="text-xs font-bold text-slate-800 mb-2 uppercase">
+            1. Voltage (V) vs Time
+          </h4>
           <div className="h-44">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={formattedChartData}>
@@ -171,15 +268,23 @@ export const LiveMonitoringPage: React.FC = () => {
                 <XAxis dataKey="time" stroke="#94A3B8" fontSize={10} />
                 <YAxis domain={['auto', 'auto']} stroke="#94A3B8" fontSize={10} />
                 <Tooltip />
-                <Line type="monotone" dataKey="Voltage" stroke="#2563EB" strokeWidth={2} dot={false} />
+                <Line
+                  type="monotone"
+                  dataKey="Voltage"
+                  stroke="#2563EB"
+                  strokeWidth={2}
+                  dot={false}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* 2. Current vs Time */}
+        {/* Current */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <h4 className="text-xs font-bold text-slate-800 mb-2 uppercase">2. Current (A) vs Time</h4>
+          <h4 className="text-xs font-bold text-slate-800 mb-2 uppercase">
+            2. Current (A) vs Time
+          </h4>
           <div className="h-44">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={formattedChartData}>
@@ -187,15 +292,23 @@ export const LiveMonitoringPage: React.FC = () => {
                 <XAxis dataKey="time" stroke="#94A3B8" fontSize={10} />
                 <YAxis domain={['auto', 'auto']} stroke="#94A3B8" fontSize={10} />
                 <Tooltip />
-                <Line type="monotone" dataKey="Current" stroke="#059669" strokeWidth={2} dot={false} />
+                <Line
+                  type="monotone"
+                  dataKey="Current"
+                  stroke="#059669"
+                  strokeWidth={2}
+                  dot={false}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* 3. Temperature vs Time */}
+        {/* Temperature */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <h4 className="text-xs font-bold text-slate-800 mb-2 uppercase">3. Temperature (°C) vs Time</h4>
+          <h4 className="text-xs font-bold text-slate-800 mb-2 uppercase">
+            3. Temperature (°C) vs Time
+          </h4>
           <div className="h-44">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={formattedChartData}>
@@ -203,15 +316,23 @@ export const LiveMonitoringPage: React.FC = () => {
                 <XAxis dataKey="time" stroke="#94A3B8" fontSize={10} />
                 <YAxis domain={['auto', 'auto']} stroke="#94A3B8" fontSize={10} />
                 <Tooltip />
-                <Line type="monotone" dataKey="Temperature" stroke="#DC2626" strokeWidth={2} dot={false} />
+                <Line
+                  type="monotone"
+                  dataKey="Temperature"
+                  stroke="#DC2626"
+                  strokeWidth={2}
+                  dot={false}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* 4. Vibration vs Time */}
+        {/* Vibration */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <h4 className="text-xs font-bold text-slate-800 mb-2 uppercase">4. Vibration RMS (g) vs Time</h4>
+          <h4 className="text-xs font-bold text-slate-800 mb-2 uppercase">
+            4. Vibration RMS (g) vs Time
+          </h4>
           <div className="h-44">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={formattedChartData}>
@@ -219,15 +340,23 @@ export const LiveMonitoringPage: React.FC = () => {
                 <XAxis dataKey="time" stroke="#94A3B8" fontSize={10} />
                 <YAxis domain={['auto', 'auto']} stroke="#94A3B8" fontSize={10} />
                 <Tooltip />
-                <Line type="monotone" dataKey="Vibration" stroke="#D97706" strokeWidth={2} dot={false} />
+                <Line
+                  type="monotone"
+                  dataKey="Vibration"
+                  stroke="#D97706"
+                  strokeWidth={2}
+                  dot={false}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* 5. Power vs Time */}
+        {/* Power */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <h4 className="text-xs font-bold text-slate-800 mb-2 uppercase">5. Power (kW) vs Time</h4>
+          <h4 className="text-xs font-bold text-slate-800 mb-2 uppercase">
+            5. Power (kW) vs Time
+          </h4>
           <div className="h-44">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={formattedChartData}>
@@ -235,15 +364,23 @@ export const LiveMonitoringPage: React.FC = () => {
                 <XAxis dataKey="time" stroke="#94A3B8" fontSize={10} />
                 <YAxis domain={['auto', 'auto']} stroke="#94A3B8" fontSize={10} />
                 <Tooltip />
-                <Line type="monotone" dataKey="Power" stroke="#7C3AED" strokeWidth={2} dot={false} />
+                <Line
+                  type="monotone"
+                  dataKey="Power"
+                  stroke="#7C3AED"
+                  strokeWidth={2}
+                  dot={false}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* 6. Energy vs Time */}
+        {/* Energy */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <h4 className="text-xs font-bold text-slate-800 mb-2 uppercase">6. Energy (kWh) vs Time</h4>
+          <h4 className="text-xs font-bold text-slate-800 mb-2 uppercase">
+            6. Energy (kWh) vs Time
+          </h4>
           <div className="h-44">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={formattedChartData}>
@@ -251,15 +388,23 @@ export const LiveMonitoringPage: React.FC = () => {
                 <XAxis dataKey="time" stroke="#94A3B8" fontSize={10} />
                 <YAxis domain={['auto', 'auto']} stroke="#94A3B8" fontSize={10} />
                 <Tooltip />
-                <Line type="monotone" dataKey="Energy" stroke="#0891B2" strokeWidth={2} dot={false} />
+                <Line
+                  type="monotone"
+                  dataKey="Energy"
+                  stroke="#0891B2"
+                  strokeWidth={2}
+                  dot={false}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* 7. Frequency vs Time */}
+        {/* Frequency */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <h4 className="text-xs font-bold text-slate-800 mb-2 uppercase">7. Frequency (Hz) vs Time</h4>
+          <h4 className="text-xs font-bold text-slate-800 mb-2 uppercase">
+            7. Frequency (Hz) vs Time
+          </h4>
           <div className="h-44">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={formattedChartData}>
@@ -267,15 +412,23 @@ export const LiveMonitoringPage: React.FC = () => {
                 <XAxis dataKey="time" stroke="#94A3B8" fontSize={10} />
                 <YAxis domain={[49, 51]} stroke="#94A3B8" fontSize={10} />
                 <Tooltip />
-                <Line type="monotone" dataKey="Frequency" stroke="#4F46E5" strokeWidth={2} dot={false} />
+                <Line
+                  type="monotone"
+                  dataKey="Frequency"
+                  stroke="#4F46E5"
+                  strokeWidth={2}
+                  dot={false}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* 8. Power Factor vs Time */}
+        {/* Power Factor */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <h4 className="text-xs font-bold text-slate-800 mb-2 uppercase">8. Power Factor vs Time</h4>
+          <h4 className="text-xs font-bold text-slate-800 mb-2 uppercase">
+            8. Power Factor vs Time
+          </h4>
           <div className="h-44">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={formattedChartData}>
@@ -283,14 +436,18 @@ export const LiveMonitoringPage: React.FC = () => {
                 <XAxis dataKey="time" stroke="#94A3B8" fontSize={10} />
                 <YAxis domain={[0.5, 1.0]} stroke="#94A3B8" fontSize={10} />
                 <Tooltip />
-                <Line type="monotone" dataKey="PowerFactor" stroke="#059669" strokeWidth={2} dot={false} />
+                <Line
+                  type="monotone"
+                  dataKey="PowerFactor"
+                  stroke="#059669"
+                  strokeWidth={2}
+                  dot={false}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
-
       </div>
-
     </MainLayout>
   );
 };
