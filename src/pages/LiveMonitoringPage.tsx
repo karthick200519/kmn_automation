@@ -78,13 +78,20 @@ const fetchLiveTelemetry = useCallback(async () => {
 }, [selectedMotorNum, timeRange]);
 
   useEffect(() => {
-    fetchLiveTelemetry();
+    let active = true;
+    const poll = () => {
+      fetchLiveTelemetry().then(() => {
+        if (!active) return;
+      });
+    };
+    poll();
 
-    const interval = setInterval(() => {
-      fetchLiveTelemetry();
-    }, 5000);
+    const interval = setInterval(poll, 5000);
 
-    return () => clearInterval(interval);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, [fetchLiveTelemetry]);
 
   const formattedChartData = telemetry.map((d) => ({
