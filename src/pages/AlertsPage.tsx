@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
 import type { Alert } from '../types/database';
 import { alertService } from '../services/alertService';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContextDef';
 import { formatTimeAgo, getSeverityColorClass } from '../utils/formatters';
 import { Bell, Filter } from 'lucide-react';
 
@@ -17,7 +17,13 @@ export const AlertsPage: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchAlerts();
+    let active = true;
+    alertService.getActiveAlerts().then((data) => {
+      if (active) setAlerts(data);
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleAcknowledge = async (alertId: string) => {

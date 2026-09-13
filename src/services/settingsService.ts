@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabase/client';
-import type { DataSourceMode, SystemSetting } from '../types/database';
+import type { DataSourceMode } from '../types/database';
 import { sanitizeErrorMessage } from '../utils/security';
 
 export const settingsService = {

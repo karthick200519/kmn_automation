@@ -39,4 +39,16 @@ describe('Zod Schema Security Input Validation', () => {
     });
     expect(confirmed.success).toBe(true);
   });
+
+  it('validates schedule schema', () => {
+    const validSchedule = scheduleSchema.safeParse({
+      motor_id: '123e4567-e89b-12d3-a456-426614174000',
+      title: 'Bearing Greasing',
+      schedule_type: 'lubrication',
+      priority: 'medium',
+      status: 'scheduled',
+      start_time: '2026-09-13T12:00:00Z',
+    });
+    expect(validSchedule.success).toBe(true);
+  });
 });

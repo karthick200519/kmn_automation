@@ -10,13 +10,14 @@ export const SystemLogsPage: React.FC = () => {
   const [eventTypeFilter, setEventTypeFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  const fetchLogs = async () => {
-    const data = await logService.getSystemLogs(50, eventTypeFilter);
-    setLogs(data);
-  };
-
   useEffect(() => {
-    fetchLogs();
+    let active = true;
+    logService.getSystemLogs(50, eventTypeFilter).then((data) => {
+      if (active) setLogs(data);
+    });
+    return () => {
+      active = false;
+    };
   }, [eventTypeFilter]);
 
   const filteredLogs = logs.filter((l) => {

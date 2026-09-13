@@ -60,7 +60,19 @@ export const UsersPage: React.FC = () => {
   };
 
   useEffect(() => {
-    loadUsers();
+    let active = true;
+    userService.getUsers().then((data) => {
+      if (active) {
+        setUsers(data);
+        setLoading(false);
+      }
+    }).catch((err) => {
+      console.error('Failed to load users:', err);
+      if (active) setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleOpenAddModal = () => {

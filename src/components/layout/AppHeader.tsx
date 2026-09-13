@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { LogOut, Bell, User as UserIcon, Menu, Activity } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContextDef';
 
 interface AppHeaderProps {
   pageTitle: string;
@@ -9,7 +9,7 @@ interface AppHeaderProps {
 
 export const AppHeader: React.FC<AppHeaderProps> = ({ pageTitle, onToggleMobileSidebar }) => {
   const { profile, role, signOut } = useAuth();
-  const [unreadAlertsCount, setUnreadAlertsCount] = useState<number>(1);
+  const [unreadAlertsCount] = useState<number>(1);
 
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">

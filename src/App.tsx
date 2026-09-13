@@ -161,7 +161,7 @@ export const App: React.FC = () => {
           />
 
           {/* Index & Fallback Redirection */}
-          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/" element={<Navigate to="/overview" replace />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </BrowserRouter>

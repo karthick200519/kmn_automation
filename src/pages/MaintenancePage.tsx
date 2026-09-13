@@ -3,7 +3,7 @@ import { MainLayout } from '../components/layout/MainLayout';
 import type { CurrentMotorStatus } from '../types/database';
 import { motorService } from '../services/motorService';
 import { formatTimeAgo, getSeverityColorClass } from '../utils/formatters';
-import { Wrench, CheckCircle, AlertTriangle, AlertOctagon, Info } from 'lucide-react';
+import { Wrench } from 'lucide-react';
 
 export const MaintenancePage: React.FC = () => {
   const [motors, setMotors] = useState<CurrentMotorStatus[]>([]);

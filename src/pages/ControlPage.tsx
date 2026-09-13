@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
 import type { GpioStatus } from '../types/database';
 import { controlService } from '../services/controlService';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContextDef';
 import { Sliders, Power, Volume2, AlertOctagon, X, RotateCcw, Activity } from 'lucide-react';
 
 export const ControlPage: React.FC = () => {
@@ -19,9 +19,18 @@ export const ControlPage: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchGpio();
-    const interval = setInterval(fetchGpio, 3000);
-    return () => clearInterval(interval);
+    let active = true;
+    const poll = () => {
+      controlService.getGpioStatus().then((data) => {
+        if (active) setGpio(data);
+      });
+    };
+    poll();
+    const interval = setInterval(poll, 3000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, []);
 
   const handleToggleOutput = async (outputName: 'relay_1' | 'relay_2' | 'relay_3' | 'buzzer', currentState: boolean) => {
