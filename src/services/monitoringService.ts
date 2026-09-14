@@ -119,7 +119,7 @@ export const monitoringService = {
       .from('machine_health')
       .select('timestamp, health_index')
       .eq('motor_id', motorId)
-      .order('timestamp', { ascending: true })
+      .order('timestamp', { ascending: false })
       .limit(limit);
 
     if (error) {
@@ -127,9 +127,11 @@ export const monitoringService = {
       throw new Error(error.message);
     }
 
-    return (data ?? []).map((row) => ({
-      timestamp: row.timestamp,
-      health_index: Number(row.health_index ?? 0),
-    }));
+    return (data ?? [])
+      .reverse()
+      .map((row) => ({
+        timestamp: row.timestamp,
+        health_index: Number(row.health_index ?? 0),
+      }));
   },
 };
