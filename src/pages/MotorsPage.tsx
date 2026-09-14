@@ -26,6 +26,24 @@ const DEFAULT_RATED_SPEC = {
   phase: '3-Phase',
 } as const;
 
+const showNumber = (value: number | null | undefined, digits = 2) =>
+  value == null ? '—' : value.toFixed(digits);
+
+const showPowerKw = (value: number | null | undefined) => {
+  if (value == null) return '—';
+  const kw = Math.abs(value) > 100 ? value / 1000 : value;
+  return `${kw.toFixed(2)} kW`;
+};
+
+const mVoltageLabel = (m: CurrentMotorStatus) => `${showNumber(m.voltage)} V`;
+const mCurrentLabel = (m: CurrentMotorStatus) => `${showNumber(m.current)} A`;
+const mTemperatureLabel = (m: CurrentMotorStatus) => `${showNumber(m.temperature)} °C`;
+const mVibrationLabel = (m: CurrentMotorStatus) => `${showNumber(m.vibration_rms)} g`;
+const mPowerLabel = (m: CurrentMotorStatus) => showPowerKw(m.power);
+const mEnergyLabel = (m: CurrentMotorStatus) => `${showNumber(m.energy)} kWh`;
+const mFrequencyLabel = (m: CurrentMotorStatus) => `${showNumber(m.frequency)} Hz`;
+const mPfLabel = (m: CurrentMotorStatus) => showNumber(m.power_factor, 3);
+
 export const MotorsPage: React.FC = () => {
   const navigate = useNavigate();
   const { role } = useAuth();
@@ -468,6 +486,32 @@ export const MotorsPage: React.FC = () => {
                 </div>
               )}
 
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+                <p className="font-bold text-slate-700 uppercase text-[11px]">
+                  Motor Identification
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-slate-500 mb-1">Motor ID</label>
+                    <input
+                      type="text"
+                      value={editingMotor.motor_id}
+                      readOnly
+                      className="w-full px-3 py-2 border border-slate-200 rounded text-xs font-mono bg-white text-slate-700"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-500 mb-1">Motor Number</label>
+                    <input
+                      type="text"
+                      value={`Motor ${editingMotor.motor_number}`}
+                      readOnly
+                      className="w-full px-3 py-2 border border-slate-200 rounded text-xs font-mono bg-white text-slate-700"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Motor Name</label>   
                 <input
@@ -477,6 +521,68 @@ export const MotorsPage: React.FC = () => {
                   onChange={(e) => setEditName(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-blue-500 font-medium"
                 />
+              </div>
+
+              <div className="p-3 bg-blue-50/60 border border-blue-200 rounded-lg space-y-2.5">
+                <div>
+                  <p className="font-bold text-blue-900 uppercase text-[11px]">
+                    Current Live Parameters (from Raspberry Pi / Supabase)
+                  </p>
+                  <p className="text-[10px] text-blue-700 mt-0.5">
+                    Read-only values. These are the latest monitored values and are not rated/nameplate values.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-white rounded border border-blue-100 px-2.5 py-2">
+                    <span className="block text-slate-500">Voltage</span>
+                    <strong className="font-mono text-slate-900">
+                      {mVoltageLabel(editingMotor)}
+                    </strong>
+                  </div>
+                  <div className="bg-white rounded border border-blue-100 px-2.5 py-2">
+                    <span className="block text-slate-500">Current</span>
+                    <strong className="font-mono text-slate-900">
+                      {mCurrentLabel(editingMotor)}
+                    </strong>
+                  </div>
+                  <div className="bg-white rounded border border-blue-100 px-2.5 py-2">
+                    <span className="block text-slate-500">Temperature</span>
+                    <strong className="font-mono text-slate-900">
+                      {mTemperatureLabel(editingMotor)}
+                    </strong>
+                  </div>
+                  <div className="bg-white rounded border border-blue-100 px-2.5 py-2">
+                    <span className="block text-slate-500">Vibration</span>
+                    <strong className="font-mono text-slate-900">
+                      {mVibrationLabel(editingMotor)}
+                    </strong>
+                  </div>
+                  <div className="bg-white rounded border border-blue-100 px-2.5 py-2">
+                    <span className="block text-slate-500">Power</span>
+                    <strong className="font-mono text-slate-900">
+                      {mPowerLabel(editingMotor)}
+                    </strong>
+                  </div>
+                  <div className="bg-white rounded border border-blue-100 px-2.5 py-2">
+                    <span className="block text-slate-500">Energy</span>
+                    <strong className="font-mono text-slate-900">
+                      {mEnergyLabel(editingMotor)}
+                    </strong>
+                  </div>
+                  <div className="bg-white rounded border border-blue-100 px-2.5 py-2">
+                    <span className="block text-slate-500">Frequency</span>
+                    <strong className="font-mono text-slate-900">
+                      {mFrequencyLabel(editingMotor)}
+                    </strong>
+                  </div>
+                  <div className="bg-white rounded border border-blue-100 px-2.5 py-2">
+                    <span className="block text-slate-500">Power Factor</span>
+                    <strong className="font-mono text-slate-900">
+                      {mPfLabel(editingMotor)}
+                    </strong>
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
