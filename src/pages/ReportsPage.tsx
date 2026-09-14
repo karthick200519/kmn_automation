@@ -152,7 +152,7 @@ export const ReportsPage: React.FC = () => {
           'id,motor_id,timestamp,voltage,current,temperature,vibration_rms,power,energy,frequency,power_factor,data_quality,source'
         )
         .gte('timestamp', startTime)
-        .order('timestamp', { ascending: true })
+        .order('timestamp', { ascending: false })
         .limit(10000);
 
       if (telemetryError) throw telemetryError;
@@ -161,7 +161,7 @@ export const ReportsPage: React.FC = () => {
         .from('ai_predictions')
         .select('motor_id,timestamp,class_id,class_name,confidence')
         .gte('timestamp', startTime)
-        .order('timestamp', { ascending: true })
+        .order('timestamp', { ascending: false })
         .limit(10000);
 
       if (predictionError) throw predictionError;
@@ -170,7 +170,7 @@ export const ReportsPage: React.FC = () => {
         .from('machine_health')
         .select('motor_id,timestamp,health_index,health_status')
         .gte('timestamp', startTime)
-        .order('timestamp', { ascending: true })
+        .order('timestamp', { ascending: false })
         .limit(10000);
 
       if (healthError) throw healthError;
@@ -179,16 +179,42 @@ export const ReportsPage: React.FC = () => {
       const predictionMap = new Map<string, PredictionRow[]>();
       const healthMap = new Map<string, HealthRow[]>();
 
+      const minuteKey = (motorId: string, timestamp: string) => {
+        const d = new Date(timestamp);
+        return `${motorId}|${d.toISOString().slice(0, 16)}`;
+      };
+
+      const predictionMinuteMap = new Map<string, PredictionRow>();
+      const healthMinuteMap = new Map<string, HealthRow>();
+
       for (const p of (predictions || []) as PredictionRow[]) {
         const list = predictionMap.get(p.motor_id) || [];
         list.push(p);
         predictionMap.set(p.motor_id, list);
+
+        const key = minuteKey(p.motor_id, p.timestamp);
+        const existing = predictionMinuteMap.get(key);
+        if (
+          !existing ||
+          new Date(p.timestamp).getTime() > new Date(existing.timestamp).getTime()
+        ) {
+          predictionMinuteMap.set(key, p);
+        }
       }
 
       for (const h of (health || []) as HealthRow[]) {
         const list = healthMap.get(h.motor_id) || [];
         list.push(h);
         healthMap.set(h.motor_id, list);
+
+        const key = minuteKey(h.motor_id, h.timestamp);
+        const existing = healthMinuteMap.get(key);
+        if (
+          !existing ||
+          new Date(h.timestamp).getTime() > new Date(existing.timestamp).getTime()
+        ) {
+          healthMinuteMap.set(key, h);
+        }
       }
 
       const minuteRows = oneRowPerMinute((telemetry || []) as TelemetryRow[]);
@@ -198,16 +224,21 @@ export const ReportsPage: React.FC = () => {
           const motor = motorMap.get(t.motor_id);
           if (!motor) return null;
 
-          const prediction = nearestValue(
-            predictionMap.get(t.motor_id) || [],
-            t.timestamp,
-            90_000
-          );
-          const healthPoint = nearestValue(
-            healthMap.get(t.motor_id) || [],
-            t.timestamp,
-            90_000
-          );
+          const prediction =
+            predictionMinuteMap.get(minuteKey(t.motor_id, t.timestamp)) ||
+            nearestValue(
+              predictionMap.get(t.motor_id) || [],
+              t.timestamp,
+              90_000
+            );
+
+          const healthPoint =
+            healthMinuteMap.get(minuteKey(t.motor_id, t.timestamp)) ||
+            nearestValue(
+              healthMap.get(t.motor_id) || [],
+              t.timestamp,
+              90_000
+            );
 
           return {
             ...t,
@@ -220,7 +251,12 @@ export const ReportsPage: React.FC = () => {
             health_status: healthPoint?.health_status ?? null,
           };
         })
-        .filter((row): row is JoinedRow => row !== null);
+        .filter((row): row is JoinedRow => row !== null)
+        .sort(
+          (a, b) =>
+            new Date(a.timestamp).getTime() -
+            new Date(b.timestamp).getTime()
+        );
 
       setMotors(motorList);
       setJoinedRows(combined);
@@ -276,29 +312,40 @@ export const ReportsPage: React.FC = () => {
   }, [joinedRows, selectedMotor, dataSourceFilter]);
 
   const makeSheetRows = (motorNumber: number) => {
-    return exportRows
+    const rows = exportRows
       .filter((row) => row.motor_number === motorNumber)
-      .map((row, index) => ({
-        'Record No.': index + 1,
-        'Timestamp': new Date(row.timestamp).toLocaleString(),
-        'Motor Number': row.motor_number,
-        'Motor Name': row.motor_name,
-        'Voltage (V)': row.voltage ?? '',
-        'Current (A)': row.current ?? '',
-        'Temperature (°C)': row.temperature ?? '',
-        'Vibration': row.vibration_rms ?? '',
-        'Power (kW)': toKw(row.power) ?? '',
-        'Energy (kWh)': row.energy ?? '',
-        'Frequency (Hz)': row.frequency ?? '',
-        'Power Factor': row.power_factor ?? '',
-        'Fault Class ID': row.fault_class_id ?? '',
-        'Fault Type': row.fault_type,
-        'AI Confidence': row.confidence == null ? '' : `${(row.confidence * 100).toFixed(1)}%`,
-        'Health Index': row.health_index ?? '',
-        'Health Status': row.health_status ?? '',
-        'Data Quality': row.data_quality ?? '',
-        'Data Source': row.source ?? '',
-      }));
+      .sort(
+        (a, b) =>
+          new Date(a.timestamp).getTime() -
+          new Date(b.timestamp).getTime()
+      );
+
+    return rows.map((row, index) => ({
+      'Record No.': index + 1,
+      'Timestamp': new Date(row.timestamp),
+      'Timestamp (IST)': new Date(row.timestamp).toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        hour12: true,
+      }),
+      'Motor ID': row.motor_id,
+      'Motor Number': row.motor_number,
+      'Motor Name': row.motor_name,
+      'Voltage (V)': row.voltage ?? '',
+      'Current (A)': row.current ?? '',
+      'Temperature (°C)': row.temperature ?? '',
+      'Vibration': row.vibration_rms ?? '',
+      'Power (kW)': toKw(row.power) ?? '',
+      'Energy (kWh)': row.energy ?? '',
+      'Frequency (Hz)': row.frequency ?? '',
+      'Power Factor': row.power_factor ?? '',
+      'Fault Class ID': row.fault_class_id ?? '',
+      'Fault Type': row.fault_type || 'No prediction',
+      'AI Confidence': row.confidence == null ? '' : `${(row.confidence * 100).toFixed(1)}%`,
+      'Health Index': row.health_index ?? '',
+      'Health Status': row.health_status ?? '',
+      'Data Quality': row.data_quality ?? '',
+      'Data Source': row.source ?? '',
+    }));
   };
 
   const handleExportExcel = () => {
@@ -314,6 +361,8 @@ export const ReportsPage: React.FC = () => {
         : [{
             'Record No.': '',
             'Timestamp': '',
+            'Timestamp (IST)': '',
+            'Motor ID': motor?.id || '',
             'Motor Number': motorNumber,
             'Motor Name': motor?.motor_name || `Motor ${motorNumber}`,
             'Voltage (V)': '',
@@ -340,11 +389,11 @@ export const ReportsPage: React.FC = () => {
       };
 
       worksheet['!cols'] = [
-        { wch: 11 }, { wch: 22 }, { wch: 13 }, { wch: 18 },
-        { wch: 13 }, { wch: 13 }, { wch: 16 }, { wch: 14 },
-        { wch: 13 }, { wch: 14 }, { wch: 15 }, { wch: 14 },
-        { wch: 15 }, { wch: 28 }, { wch: 16 }, { wch: 14 },
-        { wch: 16 }, { wch: 14 }, { wch: 14 },
+        { wch: 11 }, { wch: 24 }, { wch: 24 }, { wch: 38 }, { wch: 12 },
+        { wch: 18 }, { wch: 13 }, { wch: 13 }, { wch: 16 }, { wch: 14 },
+        { wch: 13 }, { wch: 14 }, { wch: 15 }, { wch: 14 }, { wch: 15 },
+        { wch: 28 }, { wch: 16 }, { wch: 14 }, { wch: 16 }, { wch: 14 },
+        { wch: 14 },
       ];
 
       XLSX.utils.book_append_sheet(workbook, worksheet, `Motor ${motorNumber}`);
