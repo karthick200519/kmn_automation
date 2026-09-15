@@ -11,6 +11,7 @@ import { MotorDetailPage } from './pages/MotorDetailPage';
 import { LiveMonitoringPage } from './pages/LiveMonitoringPage';
 import { FaultDiagnosisPage } from './pages/FaultDiagnosisPage';
 import { HealthDegradationPage } from './pages/HealthDegradationPage';
+import { ModelResultsPage } from './pages/ModelResultsPage';
 import { MaintenancePage } from './pages/MaintenancePage';
 import { SchedulePage } from './pages/SchedulePage';
 import { AlertsPage } from './pages/AlertsPage';
@@ -88,6 +89,14 @@ export const App: React.FC = () => {
             element={
               <ProtectedRoute allowedRoles={['admin', 'engineer', 'operator']}>
                 <HealthDegradationPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/model-results"
+            element={
+              <ProtectedRoute allowedRoles={['admin', 'engineer', 'operator']}>
+                <ModelResultsPage />
               </ProtectedRoute>
             }
           />

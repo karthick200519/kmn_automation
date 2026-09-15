@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
 import { supabase } from '../services/supabase/client';
-import { Calendar, Download, FileText, Printer, RefreshCw, FileSpreadsheet } from 'lucide-react';
+import { Calendar, FileText, Printer, RefreshCw, FileSpreadsheet } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 type Timeframe = 'daily' | 'weekly' | 'monthly' | 'yearly';
@@ -131,7 +131,7 @@ export const ReportsPage: React.FC = () => {
     return d.toISOString();
   };
 
-  const fetchReportData = async () => {
+  const fetchReportData = useCallback(async () => {
     try {
       setRefreshing(true);
       setError(null);
@@ -269,13 +269,18 @@ export const ReportsPage: React.FC = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [timeframe]);
 
   useEffect(() => {
-    void fetchReportData();
+    const timer = setTimeout(() => {
+      void fetchReportData();
+    }, 0);
     const interval = window.setInterval(() => void fetchReportData(), 5000);
-    return () => window.clearInterval(interval);
-  }, [timeframe]);
+    return () => {
+      clearTimeout(timer);
+      window.clearInterval(interval);
+    };
+  }, [fetchReportData]);
 
   const currentRows = useMemo(() => {
     return motors.map((motor) => {

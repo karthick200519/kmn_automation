@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabase/client';
-import type { MotorSensorData } from '../types/database';
+import type { MotorSensorData, AIPrediction, MachineHealth } from '../types/database';
 
 export type TimeRange = '1m' | '5m' | '15m' | '1h' | '24h' | 'custom';
 
@@ -70,8 +70,26 @@ export const monitoringService = {
     const { data, error } = await query;
 
     if (error) {
-      console.error('Telemetry query error:', error);
+      console.error('[LiveMonitoring] motor_sensor_data query failed:', error.message || error);
       throw new Error(error.message);
+    }
+
+    if ((!data || data.length === 0) && range !== 'custom') {
+      // Fallback: If no records exist in timeframe because backend is offline, fetch latest stored telemetry records
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('motor_sensor_data')
+        .select('*')
+        .eq('motor_id', motorId)
+        .order('timestamp', { ascending: false })
+        .limit(100);
+
+      if (fallbackError) {
+        console.error('[LiveMonitoring] motor_sensor_data fallback query failed:', fallbackError.message || fallbackError);
+      }
+
+      if (fallbackData && fallbackData.length > 0) {
+        return (fallbackData.reverse()) as MotorSensorData[];
+      }
     }
 
     return (data ?? []) as MotorSensorData[];
@@ -84,7 +102,7 @@ export const monitoringService = {
     motorId: string
   ): Promise<MotorSensorData | null> {
     if (!isSupabaseConfigured()) {
-      throw new Error('Supabase is not configured.');
+      return null;
     }
 
     const { data, error } = await supabase
@@ -96,11 +114,63 @@ export const monitoringService = {
       .maybeSingle();
 
     if (error) {
-      console.error('Latest telemetry query error:', error);
-      throw new Error(error.message);
+      console.error('[LiveMonitoring] motor_sensor_data latest query failed:', error.message || error);
+      return null;
     }
 
     return data as MotorSensorData | null;
+  },
+
+  /**
+   * Get the newest AI prediction for the selected motor.
+   */
+  async getLatestPrediction(
+    motorId: string
+  ): Promise<AIPrediction | null> {
+    if (!isSupabaseConfigured()) {
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from('ai_predictions')
+      .select('*')
+      .eq('motor_id', motorId)
+      .order('timestamp', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[LiveMonitoring] ai_predictions query failed:', error.message || error);
+      return null;
+    }
+
+    return data as AIPrediction | null;
+  },
+
+  /**
+   * Get the newest machine health record for the selected motor.
+   */
+  async getLatestHealth(
+    motorId: string
+  ): Promise<MachineHealth | null> {
+    if (!isSupabaseConfigured()) {
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from('machine_health')
+      .select('*')
+      .eq('motor_id', motorId)
+      .order('timestamp', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[LiveMonitoring] machine_health query failed:', error.message || error);
+      return null;
+    }
+
+    return data as MachineHealth | null;
   },
 
   /**
@@ -109,10 +179,10 @@ export const monitoringService = {
    */
   async getHealthHistory(
     motorId: string,
-    limit = 30
+    limit = 50
   ): Promise<HealthHistoryPoint[]> {
     if (!isSupabaseConfigured()) {
-      throw new Error('Supabase is not configured.');
+      return [];
     }
 
     const { data, error } = await supabase
@@ -123,11 +193,12 @@ export const monitoringService = {
       .limit(limit);
 
     if (error) {
-      console.error('Health history query error:', error);
-      throw new Error(error.message);
+      console.error('[LiveMonitoring] machine_health history query failed:', error.message || error);
+      return [];
     }
 
     return (data ?? [])
+      .slice()
       .reverse()
       .map((row) => ({
         timestamp: row.timestamp,

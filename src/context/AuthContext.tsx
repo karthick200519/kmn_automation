@@ -87,7 +87,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
 
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) {
+          console.warn('[SUPABASE AUTH] Stale/invalid session detected, clearing session:', sessionError.message);
+          await signOut();
+          setLoading(false);
+          return;
+        }
+
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
 

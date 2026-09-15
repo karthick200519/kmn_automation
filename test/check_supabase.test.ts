@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { supabase } from '../src/services/supabase/client';
+import { createClient } from '@supabase/supabase-js';
+
+const testUrl = process.env.SUPABASE_URL || 'https://pdlxrykekhyqesdsmkvs.supabase.co';
+const testKey = process.env.SUPABASE_SECRET_KEY || 'REMOVED_SUPABASE_SECRET';
+
+const testClient = createClient(testUrl, testKey);
 
 describe('Supabase Database & Views Connectivity Test', () => {
   const tables = [
@@ -24,7 +29,7 @@ describe('Supabase Database & Views Connectivity Test', () => {
 
   for (const t of tables) {
     it(`should query ${t} without database errors`, async () => {
-      const { data, error } = await supabase.from(t).select('*').limit(5);
+      const { data, error } = await testClient.from(t).select('*').limit(5);
       console.log(`[SUPABASE CHECK] Table '${t}': data length = ${data?.length ?? 0}, error = ${error?.message || 'NONE'}`);
       expect(error).toBeNull();
     });

@@ -15,6 +15,7 @@ import {
   Users,
   Settings as SettingsIcon,
   X,
+  Brain,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContextDef';
 import type { UserRole } from '../../types/database';
@@ -53,6 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen = false, onCloseM
       items: [
         { title: 'Fault Diagnosis', path: '/fault-diagnosis', icon: Stethoscope, roles: ['admin', 'engineer', 'operator'] },
         { title: 'Health & Degradation', path: '/health-degradation', icon: HeartPulse, roles: ['admin', 'engineer', 'operator'] },
+        { title: 'Model Results', path: '/model-results', icon: Brain, roles: ['admin', 'engineer', 'operator'] },
       ],
     },
     {
