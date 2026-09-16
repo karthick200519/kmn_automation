@@ -18,6 +18,7 @@ import {
   formatTimeHHMMSS,
   getDataFreshness,
   getSeverityColorClass,
+  formatConfidence,
 } from '../utils/formatters';
 
 import {
@@ -364,7 +365,7 @@ export const OverviewPage: React.FC = () => {
 
                         <div className="flex items-center justify-between text-xs">
                           <span className="text-slate-500 font-medium">Confidence:</span>
-                          <span className="font-bold text-slate-800">{Math.round((m.confidence || 0.99) * 100)}%</span>
+                          <span className="font-bold text-slate-800">{formatConfidence(m.confidence)}</span>
                         </div>
 
                         <div className="flex items-center justify-between text-xs">

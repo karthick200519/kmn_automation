@@ -55,6 +55,6 @@ describe('Supabase Database & Views Connectivity Test', () => {
       const { data, error } = await testClient.from(t).select('*').limit(5);
       console.log(`[SUPABASE CHECK] Table '${t}': data length = ${data?.length ?? 0}, error = ${error?.message || 'NONE'}`);
       expect(error).toBeNull();
-    });
+    }, 15000);
   }
 });

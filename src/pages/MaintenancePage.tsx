@@ -1,28 +1,10 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MainLayout } from '../components/layout/MainLayout';
 import { useMotors } from '../hooks/useMotors';
 import { useMaintenance } from '../hooks/useMaintenance';
-import { formatDateTime, formatTimeAgo, getSeverityColorClass } from '../utils/formatters';
+import { formatDateTime, formatTimeAgo, getSeverityColorClass, mapDecisionText, formatConfidence } from '../utils/formatters';
 import { Wrench, RefreshCw, ShieldCheck, Clock, Calendar } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-
-const mapDecisionText = (decision: string | null | undefined): { title: string; color: string } => {
-  if (!decision) return { title: 'No Maintenance Required', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
-  const lower = decision.toLowerCase();
-  if (lower.includes('normal') || lower.includes('no maintenance')) {
-    return { title: 'No Maintenance Required', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
-  }
-  if (lower.includes('inspection')) {
-    return { title: 'Inspection Recommended', color: 'bg-amber-100 text-amber-800 border-amber-200' };
-  }
-  if (lower.includes('required') || lower.includes('maintenance_required')) {
-    return { title: 'Maintenance Required', color: 'bg-red-100 text-red-800 border-red-200' };
-  }
-  if (lower.includes('immediate') || lower.includes('attention')) {
-    return { title: 'Immediate Attention Required', color: 'bg-red-600 text-white border-red-700' };
-  }
-  return { title: decision, color: 'bg-slate-100 text-slate-800 border-slate-200' };
-};
 
 export const MaintenancePage: React.FC = () => {
   const navigate = useNavigate();
@@ -103,7 +85,7 @@ export const MaintenancePage: React.FC = () => {
                     <div className="flex items-center justify-between text-slate-600">
                       <span>AI Confidence:</span>
                       <strong className="text-blue-600 font-mono">
-                        {Math.round((m.confidence || 0.99) * 100)}%
+                        {formatConfidence(m.confidence)}
                       </strong>
                     </div>
 

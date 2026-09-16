@@ -8,11 +8,11 @@ export function useMotors() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchMotors = useCallback(async () => {
+  const fetchMotors = useCallback(async (force = false) => {
     try {
       setLoading(true);
       setError(null);
-      const data = await motorService.getCurrentMotorStatus();
+      const data = await motorService.getCurrentMotorStatus(force);
       if (data && data.length > 0) {
         setMotors(data);
       } else {

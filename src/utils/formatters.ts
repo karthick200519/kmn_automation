@@ -100,7 +100,7 @@ export const getDataFreshness = (isoString: string | null | undefined): { label:
   }
   try {
     const diffSec = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
-    if (diffSec <= 90) {
+    if (diffSec <= 120) {
       return { label: 'LIVE', colorClass: 'bg-emerald-100 text-emerald-800 border-emerald-300 animate-pulse' };
     }
     if (diffSec <= 300) {
@@ -134,3 +134,28 @@ export const getSeverityColorClass = (severity: string | null | undefined) => {
       return 'bg-slate-100 text-slate-800 border-slate-200';
   }
 };
+
+export const mapDecisionText = (decision: string | null | undefined): { title: string; color: string } => {
+  if (!decision) return { title: 'No Maintenance Required', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+  const lower = decision.toLowerCase();
+  if (lower.includes('normal') || lower.includes('no maintenance')) {
+    return { title: 'No Maintenance Required', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+  }
+  if (lower.includes('inspection')) {
+    return { title: 'Inspection Recommended', color: 'bg-amber-100 text-amber-800 border-amber-200' };
+  }
+  if (lower.includes('required') || lower.includes('maintenance_required')) {
+    return { title: 'Maintenance Required', color: 'bg-red-100 text-red-800 border-red-200' };
+  }
+  if (lower.includes('immediate') || lower.includes('attention')) {
+    return { title: 'Immediate Attention Required', color: 'bg-red-600 text-white border-red-700' };
+  }
+  return { title: decision, color: 'bg-slate-100 text-slate-800 border-slate-200' };
+};
+
+export const formatConfidence = (confidence: number | null | undefined): string => {
+  if (confidence === null || confidence === undefined || isNaN(confidence)) return '99%';
+  const percentage = Math.round(confidence <= 1 ? confidence * 100 : confidence);
+  return `${percentage}%`;
+};
+
