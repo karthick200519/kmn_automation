@@ -4,7 +4,7 @@ import type { MaintenanceSchedule } from '../types/database';
 import { scheduleService } from '../services/scheduleService';
 import { useMotors } from '../hooks/useMotors';
 import { useAuth } from '../context/AuthContextDef';
-import { getSeverityColorClass } from '../utils/formatters';
+import { getSeverityColorClass, formatTimeHHMMSS } from '../utils/formatters';
 import { Calendar as CalendarIcon, List, Plus, Trash2, X, Clock, RefreshCw } from 'lucide-react';
 
 export const SchedulePage: React.FC = () => {
@@ -12,6 +12,13 @@ export const SchedulePage: React.FC = () => {
   const { motors } = useMotors();
   const [schedules, setSchedules] = useState<MaintenanceSchedule[]>([]);
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+
+  const newestTimestamp = schedules.reduce<string | null>((acc, s) => {
+    const ts = s.created_at || s.start_time;
+    if (!ts) return acc;
+    if (!acc) return ts;
+    return new Date(ts) > new Date(acc) ? ts : acc;
+  }, null);
 
   // Add Schedule Modal State
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -118,6 +125,11 @@ export const SchedulePage: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-3 text-xs font-semibold">
+            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-lg border border-slate-200 font-medium">
+              <Clock className="w-3.5 h-3.5 text-slate-400" />
+              <span>Last Updated:</span>
+              <strong className="text-slate-800 font-mono">{formatTimeHHMMSS(newestTimestamp)}</strong>
+            </span>
             <button
               onClick={() => fetchSchedules()}
               className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors"

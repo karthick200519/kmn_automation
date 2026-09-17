@@ -3,8 +3,8 @@ import { MainLayout } from '../components/layout/MainLayout';
 import { useDiagnosis } from '../hooks/useDiagnosis';
 import { useMotors } from '../hooks/useMotors';
 import { FAULT_CLASSES, getFaultClass } from '../config/faultClasses';
-import { formatDateTime, formatTimeAgo, getSeverityColorClass } from '../utils/formatters';
-import { Stethoscope, Filter, RefreshCw, Cpu } from 'lucide-react';
+import { formatDateTime, formatTimeAgo, formatTimeHHMMSS, getSeverityColorClass } from '../utils/formatters';
+import { Stethoscope, Filter, RefreshCw, Cpu, Clock } from 'lucide-react';
 
 export const FaultDiagnosisPage: React.FC = () => {
   const { motors } = useMotors();
@@ -14,6 +14,12 @@ export const FaultDiagnosisPage: React.FC = () => {
   const { predictions, loading, refresh } = useDiagnosis(
     selectedMotorId === 'all' ? undefined : selectedMotorId
   );
+
+  const newestTimestamp = predictions.reduce<string | null>((acc, p) => {
+    if (!p.timestamp) return acc;
+    if (!acc) return p.timestamp;
+    return new Date(p.timestamp) > new Date(acc) ? p.timestamp : acc;
+  }, null);
 
   const filteredPredictions = predictions.filter((p) => {
     if (selectedCategoryFilter === 'all') return true;
@@ -38,6 +44,12 @@ export const FaultDiagnosisPage: React.FC = () => {
 
           {/* Filter Controls */}
           <div className="flex flex-wrap items-center gap-3 text-xs">
+            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-lg border border-slate-200 font-medium">
+              <Clock className="w-3.5 h-3.5 text-slate-400" />
+              <span>Last Updated:</span>
+              <strong className="text-slate-800 font-mono">{formatTimeHHMMSS(newestTimestamp)}</strong>
+            </span>
+
             <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
               <Filter className="w-3.5 h-3.5 text-slate-400" />
               <select
@@ -76,7 +88,7 @@ export const FaultDiagnosisPage: React.FC = () => {
               className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors"
               title="Refresh Predictions"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>

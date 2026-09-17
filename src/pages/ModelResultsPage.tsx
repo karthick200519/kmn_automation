@@ -1,9 +1,15 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { MainLayout } from '../components/layout/MainLayout';
-import { motorService } from '../services/motorService';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import type { AiPrediction, CurrentMotorStatus, Motor } from '../types/database';
+import type {
+  AiPrediction,
+  MotorSensorData,
+  MachineHealth,
+  MotorDegradation,
+  MaintenanceDecisionRecord,
+  Motor,
+} from '../types/database';
 import { FAULT_CLASSES } from '../config/faultClasses';
 import {
   DEMO_OVERALL_METRICS,
@@ -17,10 +23,18 @@ import {
   DEMO_CLASS_NAMES,
 } from '../data/modelResultsData';
 import {
+  formatVoltage,
+  formatCurrent,
+  formatTemperature,
+  formatVibration,
+  formatPower,
+  formatEnergy,
   formatTimeAgo,
   formatTimeHHMMSS,
   getDataFreshness,
   getSeverityColorClass,
+  mapDecisionText,
+  formatConfidence,
 } from '../utils/formatters';
 
 import {
@@ -41,6 +55,11 @@ import {
   Clock,
   ShieldCheck,
   Radio,
+  TrendingDown,
+  Wrench,
+  HeartPulse,
+  Database,
+  Server,
 } from 'lucide-react';
 
 import {
@@ -57,36 +76,213 @@ import {
   ZAxis,
 } from 'recharts';
 
-interface LiveMotorPredictionItem {
+export interface LiveMotorMonitoringItem {
   motor_id: string;
   motor_number: number;
   motor_name: string;
+  sensorData: MotorSensorData | null;
   prediction: AiPrediction | null;
+  health: MachineHealth | null;
+  degradation: MotorDegradation | null;
+  maintenance: MaintenanceDecisionRecord | null;
+  hasRealData?: boolean;
 }
 
+// Sample Motor Results Data for Section 2 (Sample / Demo Data)
+const SAMPLE_MOTOR_ITEMS: LiveMotorMonitoringItem[] = [
+  {
+    motor_id: 'sample-m1-id',
+    motor_number: 1,
+    motor_name: 'Main Drive Motor (Demo)',
+    sensorData: {
+      id: 'sample-s1',
+      motor_id: 'sample-m1-id',
+      timestamp: new Date().toISOString(),
+      voltage: 415.2,
+      current: 14.8,
+      temperature: 42.5,
+      vibration_rms: 1.25,
+      power: 10.2,
+      energy: 145.8,
+      frequency: 50,
+      power_factor: 0.89,
+      data_quality: 'valid',
+      source: 'sample',
+      created_at: new Date().toISOString(),
+    },
+    prediction: {
+      id: 'sample-p1',
+      motor_id: 'sample-m1-id',
+      timestamp: new Date().toISOString(),
+      class_id: 0,
+      class_name: 'Healthy',
+      confidence: 0.994,
+      model_version: '1d-cnn-v1',
+      created_at: new Date().toISOString(),
+    },
+    health: {
+      id: 'sample-h1',
+      motor_id: 'sample-m1-id',
+      timestamp: new Date().toISOString(),
+      health_index: 98,
+      health_status: 'Optimal',
+      created_at: new Date().toISOString(),
+    },
+    degradation: {
+      id: 'sample-d1',
+      motor_id: 'sample-m1-id',
+      timestamp: new Date().toISOString(),
+      degradation_rate: 0.05,
+      degradation_status: 'Stable',
+      created_at: new Date().toISOString(),
+    },
+    maintenance: {
+      id: 'sample-mn1',
+      motor_id: 'sample-m1-id',
+      prediction_id: null,
+      timestamp: new Date().toISOString(),
+      decision: 'normal_operation',
+      recommendation: 'Continuous routine telemetry monitoring.',
+      created_at: new Date().toISOString(),
+    },
+  },
+  {
+    motor_id: 'sample-m2-id',
+    motor_number: 2,
+    motor_name: 'Cooling Pump Motor (Demo)',
+    sensorData: {
+      id: 'sample-s2',
+      motor_id: 'sample-m2-id',
+      timestamp: new Date().toISOString(),
+      voltage: 412.0,
+      current: 18.2,
+      temperature: 68.4,
+      vibration_rms: 3.85,
+      power: 12.8,
+      energy: 210.4,
+      frequency: 50,
+      power_factor: 0.85,
+      data_quality: 'valid',
+      source: 'sample',
+      created_at: new Date().toISOString(),
+    },
+    prediction: {
+      id: 'sample-p2',
+      motor_id: 'sample-m2-id',
+      timestamp: new Date().toISOString(),
+      class_id: 16,
+      class_name: 'Bearing Inner-Race Fault',
+      confidence: 0.948,
+      model_version: '1d-cnn-v1',
+      created_at: new Date().toISOString(),
+    },
+    health: {
+      id: 'sample-h2',
+      motor_id: 'sample-m2-id',
+      timestamp: new Date().toISOString(),
+      health_index: 72,
+      health_status: 'Degraded',
+      created_at: new Date().toISOString(),
+    },
+    degradation: {
+      id: 'sample-d2',
+      motor_id: 'sample-m2-id',
+      timestamp: new Date().toISOString(),
+      degradation_rate: 0.85,
+      degradation_status: 'Slowly Degrading',
+      created_at: new Date().toISOString(),
+    },
+    maintenance: {
+      id: 'sample-mn2',
+      motor_id: 'sample-m2-id',
+      prediction_id: null,
+      timestamp: new Date().toISOString(),
+      decision: 'inspection_recommended',
+      recommendation: 'Schedule bearing inspection within 7 days.',
+      created_at: new Date().toISOString(),
+    },
+  },
+  {
+    motor_id: 'sample-m3-id',
+    motor_number: 3,
+    motor_name: 'Exhaust Fan Motor (Demo)',
+    sensorData: {
+      id: 'sample-s3',
+      motor_id: 'sample-m3-id',
+      timestamp: new Date().toISOString(),
+      voltage: 416.5,
+      current: 12.1,
+      temperature: 39.8,
+      vibration_rms: 0.95,
+      power: 8.5,
+      energy: 98.2,
+      frequency: 50,
+      power_factor: 0.91,
+      data_quality: 'valid',
+      source: 'sample',
+      created_at: new Date().toISOString(),
+    },
+    prediction: {
+      id: 'sample-p3',
+      motor_id: 'sample-m3-id',
+      timestamp: new Date().toISOString(),
+      class_id: 0,
+      class_name: 'Healthy',
+      confidence: 0.998,
+      model_version: '1d-cnn-v1',
+      created_at: new Date().toISOString(),
+    },
+    health: {
+      id: 'sample-h3',
+      motor_id: 'sample-m3-id',
+      timestamp: new Date().toISOString(),
+      health_index: 99,
+      health_status: 'Optimal',
+      created_at: new Date().toISOString(),
+    },
+    degradation: {
+      id: 'sample-d3',
+      motor_id: 'sample-m3-id',
+      timestamp: new Date().toISOString(),
+      degradation_rate: 0.02,
+      degradation_status: 'Stable',
+      created_at: new Date().toISOString(),
+    },
+    maintenance: {
+      id: 'sample-mn3',
+      motor_id: 'sample-m3-id',
+      prediction_id: null,
+      timestamp: new Date().toISOString(),
+      decision: 'normal_operation',
+      recommendation: 'Continuous routine telemetry monitoring.',
+      created_at: new Date().toISOString(),
+    },
+  },
+];
+
 export const ModelResultsPage: React.FC = () => {
-  const [motorStatuses, setMotorStatuses] = useState<CurrentMotorStatus[]>([]);
-  const [livePredictions, setLivePredictions] = useState<LiveMotorPredictionItem[]>([]);
-  const [isLoadingLive, setIsLoadingLive] = useState<boolean>(true);
-  const [liveError, setLiveError] = useState<string | null>(null);
+  const [realItems, setRealItems] = useState<LiveMotorMonitoringItem[]>([]);
+  const [isLoadingReal, setIsLoadingReal] = useState<boolean>(true);
+  const [realError, setRealError] = useState<string | null>(null);
   const [realtimeStatus, setRealtimeStatus] = useState<string>('CONNECTING');
+  const [lastRealUpdateTime, setLastRealUpdateTime] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedClusterClass, setSelectedClusterClass] = useState<string>('all');
 
-  // Load the latest stored prediction independently for each configured motor.
-  // LIVE mode never falls back to hard-coded/mock motors.
-  const fetchLivePredictions = useCallback(async () => {
+  // Load the latest stored real telemetry, AI prediction, health, degradation & maintenance from Supabase for M1, M2, M3
+  const fetchRealMonitoringData = useCallback(async (isSilent: boolean = false) => {
     if (!isSupabaseConfigured()) {
-      setLiveError('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
-      setLivePredictions([]);
-      setMotorStatuses([]);
-      setIsLoadingLive(false);
+      setRealError('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.');
+      setRealItems([]);
+      setIsLoadingReal(false);
       return;
     }
 
     try {
-      setIsLoadingLive(true);
-      setLiveError(null);
+      if (!isSilent) {
+        setIsLoadingReal(true);
+      }
+      setRealError(null);
 
       const { data: baseMotors, error: motorsError } = await supabase
         .from('motors')
@@ -100,111 +296,111 @@ export const ModelResultsPage: React.FC = () => {
       const configuredMotors = (baseMotors as Motor[] | null) ?? [];
 
       if (configuredMotors.length === 0) {
-        setLivePredictions([]);
-        setMotorStatuses([]);
-        setLiveError('No configured motors were found in the Supabase motors table.');
+        setRealItems([]);
+        setRealError('No configured motors were found in the Supabase motors table.');
         return;
       }
 
-      const items = await Promise.all(
-        configuredMotors.map(async (motor) => {
-          try {
-            const { data: newestPred, error: predictionError } = await supabase
-              .from('ai_predictions')
-              .select('*')
-              .eq('motor_id', motor.id)
-              .order('timestamp', { ascending: false })
-              .limit(1)
-              .maybeSingle();
+      // Query latest records across all condition monitoring tables
+      const [sensorRes, predRes, healthRes, degRes, maintRes] = await Promise.all([
+        supabase.from('motor_sensor_data').select('*').order('timestamp', { ascending: false }).limit(50),
+        supabase.from('ai_predictions').select('*').order('timestamp', { ascending: false }).limit(50),
+        supabase.from('machine_health').select('*').order('timestamp', { ascending: false }).limit(50),
+        supabase.from('motor_degradation').select('*').order('timestamp', { ascending: false }).limit(50),
+        supabase.from('maintenance_decisions').select('*').order('timestamp', { ascending: false }).limit(50),
+      ]);
 
-            if (predictionError) {
-              throw new Error(predictionError.message);
-            }
+      const sensors = (sensorRes.data as MotorSensorData[]) || [];
+      const predictions = (predRes.data as AiPrediction[]) || [];
+      const healths = (healthRes.data as MachineHealth[]) || [];
+      const degradations = (degRes.data as MotorDegradation[]) || [];
+      const maints = (maintRes.data as MaintenanceDecisionRecord[]) || [];
 
-            return {
-              motor_id: motor.id,
-              motor_number: motor.motor_number,
-              motor_name: motor.motor_name || `Motor ${motor.motor_number}`,
-              prediction: (newestPred as AiPrediction | null) ?? null,
-            };
-          } catch (err) {
-            console.warn(
-              `Failed to fetch latest prediction for motor ${motor.motor_number}:`,
-              err,
-            );
+      const items: LiveMotorMonitoringItem[] = configuredMotors.map((m) => {
+        const motorId = m.id;
+        // Filter for non-sample real sensor records from Raspberry Pi
+        const realSensor = sensors.find((s) => s.motor_id === motorId && (s as unknown as { source?: string }).source !== 'sample') || null;
+        const prediction = realSensor ? predictions.find((p) => p.motor_id === motorId) || null : null;
+        const health = realSensor ? healths.find((h) => h.motor_id === motorId) || null : null;
+        const degradation = realSensor ? degradations.find((d) => d.motor_id === motorId) || null : null;
+        const maintenance = realSensor ? maints.find((mn) => mn.motor_id === motorId) || null : null;
 
-            return {
-              motor_id: motor.id,
-              motor_number: motor.motor_number,
-              motor_name: motor.motor_name || `Motor ${motor.motor_number}`,
-              prediction: null,
-            };
-          }
-        }),
-      );
+        return {
+          motor_id: motorId,
+          motor_number: m.motor_number,
+          motor_name: m.motor_name || `Motor ${m.motor_number}`,
+          sensorData: realSensor,
+          prediction,
+          health,
+          degradation,
+          maintenance,
+          hasRealData: Boolean(realSensor),
+        };
+      });
 
-      setLivePredictions(items);
+      setRealItems(items);
 
-      try {
-        const statusData = await motorService.getCurrentMotorStatus();
-        setMotorStatuses(statusData ?? []);
-      } catch (err) {
-        console.warn('Failed to load current motor health summary:', err);
-        setMotorStatuses([]);
+      const latestTs = items
+        .map((i) => i.sensorData?.timestamp)
+        .filter(Boolean)
+        .sort()
+        .pop();
+
+      if (latestTs) {
+        setLastRealUpdateTime(formatTimeHHMMSS(latestTs));
+      } else {
+        setLastRealUpdateTime(new Date().toLocaleTimeString());
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown Supabase error';
-      console.error('Error fetching live predictions for ModelResultsPage:', err);
-      setLiveError(message);
-      setLivePredictions([]);
-      setMotorStatuses([]);
+      console.error('Error fetching real motor data:', err);
+      setRealError(message);
+      setRealItems([]);
     } finally {
-      setIsLoadingLive(false);
+      setIsLoadingReal(false);
     }
   }, []);
 
   useEffect(() => {
-    void fetchLivePredictions();
+    void fetchRealMonitoringData(false);
 
     if (!isSupabaseConfigured()) {
       setRealtimeStatus('NOT CONFIGURED');
       return;
     }
 
+    // Single Supabase Realtime subscription watching for Raspberry Pi data insertions
     const channel = supabase
-      .channel('realtime_model_results_live_predictions')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'ai_predictions' },
-        (payload) => {
-          const newPred = payload.new as AiPrediction;
-          const oldPred = payload.old as Partial<AiPrediction> | null;
-          const motorId = newPred?.motor_id ?? oldPred?.motor_id;
-
-          if (!motorId) return;
-
-          setLivePredictions((prev) =>
-            prev.map((item) =>
-              item.motor_id === motorId
-                ? {
-                    ...item,
-                    prediction: payload.eventType === 'DELETE' ? null : newPred,
-                  }
-                : item,
-            ),
-          );
-
-          void fetchLivePredictions();
-        },
-      )
+      .channel('realtime_model_results_real_motor_data')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'motor_sensor_data' }, () => {
+        void fetchRealMonitoringData(true);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ai_predictions' }, () => {
+        void fetchRealMonitoringData(true);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'machine_health' }, () => {
+        void fetchRealMonitoringData(true);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'motor_degradation' }, () => {
+        void fetchRealMonitoringData(true);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'maintenance_decisions' }, () => {
+        void fetchRealMonitoringData(true);
+      })
       .subscribe((status) => {
         setRealtimeStatus(status);
       });
 
+    // 1-minute silent auto-refresh interval (data only, no page reload or UI flicker)
+    const intervalId = setInterval(() => {
+      void fetchRealMonitoringData(true);
+    }, 60000);
+
     return () => {
       void supabase.removeChannel(channel);
+      clearInterval(intervalId);
     };
-  }, [fetchLivePredictions]);
+  }, [fetchRealMonitoringData]);
 
   // Filter class-wise performance table by search query
   const filteredClassMetrics = DEMO_CLASS_METRICS.filter(
@@ -248,36 +444,61 @@ export const ModelResultsPage: React.FC = () => {
     const wsClass = XLSX.utils.json_to_sheet(classData);
     XLSX.utils.book_append_sheet(wb, wsClass, 'Class Performance');
 
-    // Sheet 3: Live Motor AI Predictions
-    const livePredData = livePredictions.map((item) => {
+    // Sheet 3: Sample & Real Motor Monitoring Data
+    const combinedData = [...SAMPLE_MOTOR_ITEMS, ...realItems].map((item) => {
       const pred = item.prediction;
+      const sensor = item.sensorData;
+      const health = item.health;
+      const degradation = item.degradation;
+      const maint = item.maintenance;
+
       let className = pred?.class_name || 'No Prediction Available';
       if (pred?.class_id !== undefined && FAULT_CLASSES[pred.class_id]) {
         className = FAULT_CLASSES[pred.class_id].class_name;
       }
-      const freshness = getDataFreshness(pred?.timestamp);
+
+      const newestTimestamp =
+        sensor?.timestamp ||
+        pred?.timestamp ||
+        health?.timestamp ||
+        degradation?.timestamp ||
+        maint?.timestamp;
+
+      const freshness = getDataFreshness(newestTimestamp);
 
       return {
+        'Data Source': item.hasRealData ? 'Real Motor Data (Pi)' : 'Sample Motor Data (Demo)',
         'Motor Number': `Motor ${item.motor_number}`,
         'Motor Name': item.motor_name,
         'Motor ID': item.motor_id,
+        'Voltage (V)': sensor?.voltage ?? 'N/A',
+        'Current (A)': sensor?.current ?? 'N/A',
+        'Temperature (°C)': sensor?.temperature ?? 'N/A',
+        'Vibration RMS (mm/s)': sensor?.vibration_rms ?? 'N/A',
+        'Power (kW)': sensor?.power ? (sensor.power > 100 ? sensor.power / 1000 : sensor.power).toFixed(2) : 'N/A',
+        'Energy (kWh)': sensor?.energy ?? 'N/A',
         'Predicted Class ID': pred ? `#${pred.class_id}` : 'N/A',
         'Predicted Fault Class': className,
-        'Confidence (%)': pred ? `${Math.round((pred.confidence || 0) * 100)}%` : 'N/A',
+        'Confidence (%)': pred ? formatConfidence(pred.confidence) : 'N/A',
         'Model Version': pred?.model_version || 'N/A',
-        'Prediction Timestamp': pred?.timestamp || 'N/A',
+        'Health Index': health?.health_index ?? 'N/A',
+        'Health Status': health?.health_status ?? 'N/A',
+        'Degradation Rate (%/h)': degradation?.degradation_rate ?? 'N/A',
+        'Degradation Status': degradation?.degradation_status ?? 'N/A',
+        'Maintenance Decision': maint?.decision ?? 'N/A',
+        'Last Updated': newestTimestamp || 'N/A',
         'Freshness Status': freshness.label,
       };
     });
-    const wsLive = XLSX.utils.json_to_sheet(livePredData);
-    XLSX.utils.book_append_sheet(wb, wsLive, 'Live Motor Predictions');
+    const wsLive = XLSX.utils.json_to_sheet(combinedData);
+    XLSX.utils.book_append_sheet(wb, wsLive, 'Motor Predictions');
 
     // Save Excel file
     XLSX.writeFile(wb, 'DL_Model_Results_Evaluation.xlsx');
   };
 
   return (
-    <MainLayout pageTitle="Model Results & Live AI Predictions">
+    <MainLayout pageTitle="Model Results & Real Motor Data">
       <div className="space-y-6">
         {/* Header Banner & Disclaimers */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
@@ -286,15 +507,15 @@ export const ModelResultsPage: React.FC = () => {
               <div className="flex items-center space-x-3">
                 <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                   <Brain className="w-6 h-6 text-blue-600" />
-                  <span>Model Results & Live Fault Inference</span>
+                  <span>Model Results & Motor Data Monitoring</span>
                 </h2>
-                <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  Demo / Sample Results
+                <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-300 flex items-center gap-1">
+                  <Award className="w-3.5 h-3.5" />
+                  1D CNN Evaluation & Real-Time Pipeline
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-1 font-medium">
-                Deep Learning Model Evaluation Performance and Live Edge AI Classification Results
+                Deep Learning Model Evaluation Results and Live Motor Edge Telemetry Collection
               </p>
             </div>
 
@@ -308,11 +529,11 @@ export const ModelResultsPage: React.FC = () => {
             </button>
           </div>
 
-          {/* Warning Disclaimer Box */}
+          {/* Notice Disclaimer Box */}
           <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-start space-x-2.5">
             <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
             <p className="leading-relaxed">
-              <strong>Notice:</strong> Model Evaluation Metrics represent training/sample results for interface development. Replace with experimentally validated DL results before publication. Live Motor Predictions below reflect real-time Supabase records.
+              <strong>Notice:</strong> Model Evaluation Metrics represent baseline training results for project demonstration. Live motor data from Raspberry Pi edge streaming is monitored separately in the Real Motor Data section below.
             </p>
           </div>
         </div>
@@ -465,167 +686,199 @@ export const ModelResultsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* SECTION 2 — LIVE MOTOR AI PREDICTIONS */}
+        {/* SECTION 2 — SAMPLE MOTOR AI PREDICTIONS & BASELINE MONITORING */}
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                <Cpu className="w-4 h-4 text-blue-600" />
-                <span>Section 2 — Live Motor AI Predictions</span>
-              </h3>
-              <p className="text-xs text-slate-500">
-                Latest fault classification results received from Raspberry Pi / Supabase (`ai_predictions`)
-              </p>
-            </div>
-
-            <div className="flex items-center space-x-3 text-xs">
-              <span className="flex items-center gap-1.5 text-slate-500">
-                <Radio
-                  className={`w-3.5 h-3.5 ${
-                    realtimeStatus === 'SUBSCRIBED'
-                      ? 'text-emerald-500 animate-pulse'
-                      : realtimeStatus === 'CHANNEL_ERROR' || realtimeStatus === 'TIMED_OUT'
-                      ? 'text-red-500'
-                      : 'text-amber-500'
-                  }`}
-                />
-                <span>
-                  {realtimeStatus === 'SUBSCRIBED'
-                    ? 'Realtime Active'
-                    : `Realtime ${realtimeStatus.toLowerCase()}`}
+              <div className="flex items-center space-x-2">
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <Cpu className="w-4 h-4 text-blue-600" />
+                  <span>Section 2 — Sample Motor AI Predictions & Baseline Monitoring</span>
+                </h3>
+                <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-amber-100 text-amber-800 border border-amber-300">
+                  Sample Data
                 </span>
-              </span>
-              <button
-                onClick={() => fetchLivePredictions()}
-                className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors"
-                title="Refresh Predictions"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingLive ? 'animate-spin' : ''}`} />
-              </button>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Baseline sample motor telemetry & AI fault predictions retained for project demonstration
+              </p>
             </div>
           </div>
 
-          {liveError && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {SAMPLE_MOTOR_ITEMS.map((item) => {
+              const pred = item.prediction;
+              const sensor = item.sensorData;
+              const health = item.health;
+              const degradation = item.degradation;
+              const maint = item.maintenance;
 
+              const newestTimestamp = sensor?.timestamp || pred?.timestamp;
+              const freshness = getDataFreshness(newestTimestamp);
 
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+              let className = pred?.class_name;
+              if (pred?.class_id !== undefined && FAULT_CLASSES[pred.class_id]) {
+                className = FAULT_CLASSES[pred.class_id].class_name;
+              }
 
+              const decInfo = mapDecisionText(maint?.decision);
 
-              <strong>Live data notice:</strong> {liveError}
-
-
-            </div>
-
-
-          )}
-
-          
-
-          {isLoadingLive && livePredictions.length === 0 ? (
-            <div className="p-8 text-center text-xs text-slate-400 animate-pulse">
-              Loading live AI motor predictions from Supabase...
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {livePredictions.map((item) => {
-                const pred = item.prediction;
-                const freshness = getDataFreshness(pred?.timestamp);
-
-                let className = pred?.class_name;
-                if (pred?.class_id !== undefined && FAULT_CLASSES[pred.class_id]) {
-                  className = FAULT_CLASSES[pred.class_id].class_name;
-                }
-
-                return (
+              return (
+                <div
+                  key={item.motor_id}
+                  className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4 relative overflow-hidden flex flex-col justify-between"
+                >
                   <div
-                    key={item.motor_id}
-                    className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-3 relative overflow-hidden flex flex-col justify-between"
-                  >
-                    {/* Top Accent Strip */}
-                    <div
-                      className={`absolute top-0 left-0 right-0 h-1.5 ${
-                        !pred
-                          ? 'bg-slate-300'
-                          : pred.class_id === 0
-                          ? 'bg-emerald-500'
-                          : pred.class_id >= 20
-                          ? 'bg-amber-500'
-                          : 'bg-red-600'
-                      }`}
-                    />
+                    className={`absolute top-0 left-0 right-0 h-1.5 ${
+                      !pred
+                        ? 'bg-slate-300'
+                        : pred.class_id === 0
+                        ? 'bg-emerald-500'
+                        : pred.class_id >= 20
+                        ? 'bg-amber-500'
+                        : 'bg-red-600'
+                    }`}
+                  />
 
-                    <div>
-                      {/* Motor Card Header */}
-                      <div className="flex items-center justify-between pt-1 mb-2">
-                        <div className="flex items-center space-x-2">
-                          <span className="w-8 h-8 bg-slate-100 text-slate-800 rounded-full flex items-center justify-center font-bold text-xs border border-slate-300">
-                            M{item.motor_number}
-                          </span>
-                          <div>
-                            <h4 className="font-bold text-slate-900 text-sm">{item.motor_name}</h4>
-                            <p className="text-[11px] text-slate-400 font-mono">
-                              ID: {item.motor_id.substring(0, 8)}...
-                            </p>
-                          </div>
-                        </div>
-
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${freshness.colorClass}`}>
-                          {freshness.label}
+                  <div className="space-y-4 pt-1">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <div className="flex items-center space-x-2.5">
+                        <span className="w-9 h-9 bg-blue-50 text-blue-800 rounded-full flex items-center justify-center font-bold text-xs border border-blue-200 shadow-xs">
+                          M{item.motor_number}
                         </span>
+                        <div>
+                          <h4 className="font-bold text-slate-900 text-sm">
+                            Motor {item.motor_number} | {item.motor_name}
+                          </h4>
+                          <p className="text-[11px] text-slate-400 font-mono">
+                            ID: {item.motor_id}
+                          </p>
+                        </div>
                       </div>
 
-                      {/* AI Prediction Details */}
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${freshness.colorClass}`}>
+                        Sample Demo
+                      </span>
+                    </div>
+
+                    <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 space-y-2">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                        <Activity className="w-3 h-3 text-blue-500" /> Sample Sensor Parameters
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-slate-400 text-[11px] block">Voltage</span>
+                          <strong className="text-slate-900 font-mono">{formatVoltage(sensor?.voltage)}</strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 text-[11px] block">Current</span>
+                          <strong className="text-slate-900 font-mono">{formatCurrent(sensor?.current)}</strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 text-[11px] block">Temperature</span>
+                          <strong className="text-slate-900 font-mono">{formatTemperature(sensor?.temperature)}</strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 text-[11px] block">Vibration RMS</span>
+                          <strong className="text-slate-900 font-mono">{formatVibration(sensor?.vibration_rms)}</strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 text-[11px] block">Power</span>
+                          <strong className="text-slate-900 font-mono">{formatPower(sensor?.power)}</strong>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 text-[11px] block">Energy</span>
+                          <strong className="text-slate-900 font-mono">{formatEnergy(sensor?.energy)}</strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-blue-50/50 p-3 rounded-lg border border-blue-100 space-y-2 text-xs">
+                      <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider flex items-center gap-1">
+                        <ShieldCheck className="w-3.5 h-3.5 text-blue-600" /> AI Fault Inference
+                      </p>
                       {pred ? (
-                        <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 space-y-2 text-xs my-2">
+                        <div className="space-y-1.5">
                           <div className="flex items-center justify-between">
                             <span className="text-slate-500 font-medium">Class ID:</span>
-                            <span className="font-mono font-bold text-slate-900 px-2 py-0.5 bg-slate-200/60 rounded text-[11px]">
+                            <span className="font-mono font-bold text-slate-900 px-2 py-0.5 bg-blue-100/70 rounded text-[11px]">
                               Class #{pred.class_id}
                             </span>
                           </div>
-
                           <div className="flex items-center justify-between">
-                            <span className="text-slate-500 font-medium flex items-center gap-1">
-                              <ShieldCheck className="w-3.5 h-3.5 text-blue-600" /> Fault Class:
-                            </span>
-                            <span className="font-bold text-slate-900 truncate max-w-[170px]" title={className || 'Healthy'}>
+                            <span className="text-slate-500 font-medium">Fault Class:</span>
+                            <span className="font-bold text-slate-900 truncate max-w-[150px]" title={className || 'Healthy'}>
                               {className || 'Healthy'}
                             </span>
                           </div>
-
                           <div className="flex items-center justify-between">
                             <span className="text-slate-500 font-medium">Confidence:</span>
                             <span className="font-mono font-black text-blue-600">
-                              {Math.round((pred.confidence || 0) * 100)}%
+                              {formatConfidence(pred.confidence)}
                             </span>
                           </div>
-
-                          <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/60">
-                            <span>Model Tag:</span>
-                            <span className="font-mono text-slate-700">{pred.model_version || 'cnn-24class-v1'}</span>
+                          <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-blue-100">
+                            <span>Model:</span>
+                            <span className="font-mono text-slate-700">{pred.model_version || '1d-cnn-v1'}</span>
                           </div>
                         </div>
                       ) : (
-                        <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 text-center my-2">
-                          <AlertCircle className="w-6 h-6 text-slate-300 mx-auto mb-1" />
-                          <p className="text-xs font-semibold text-slate-500 italic">No AI prediction available yet</p>
-                        </div>
+                        <p className="text-slate-400 text-xs italic">No sample prediction available</p>
                       )}
                     </div>
 
-                    {/* Card Footer: Timestamp */}
-                    <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-100 mt-auto">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5 text-slate-400" />
-                        Prediction Time: <strong className="text-slate-700">{formatTimeHHMMSS(pred?.timestamp)}</strong>
-                      </span>
-                      <span>{formatTimeAgo(pred?.timestamp)}</span>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100 space-y-1">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                          <HeartPulse className="w-3 h-3 text-emerald-600" /> Health
+                        </p>
+                        <div className="flex items-baseline justify-between">
+                          <span className="text-base font-black text-slate-900">
+                            {health?.health_index != null ? `${health.health_index}%` : 'N/A'}
+                          </span>
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${getSeverityColorClass(health?.health_status || 'Optimal')}`}>
+                            {health?.health_status || 'Optimal'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100 space-y-1">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                          <TrendingDown className="w-3 h-3 text-amber-500" /> Degradation
+                        </p>
+                        <div>
+                          <span className="text-xs font-bold text-slate-900 block font-mono">
+                            {degradation?.degradation_rate != null ? `${Number(degradation.degradation_rate).toFixed(2)} %/h` : '0.00 %/h'}
+                          </span>
+                          <span className="text-[10px] font-medium text-slate-500 block truncate">
+                            {degradation?.degradation_status || 'Stable'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 space-y-1">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                        <Wrench className="w-3 h-3 text-blue-600" /> Maintenance
+                      </p>
+                      <div className="pt-0.5">
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border inline-block ${decInfo.color}`}>
+                          {decInfo.title}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 pt-3 border-t border-slate-100 mt-auto">
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-slate-400" />
+                      Status: <strong className="text-slate-700">Sample Demonstration Data</strong>
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* SECTION 3 — 24-CLASS PERFORMANCE EVALUATION TABLE */}
@@ -637,7 +890,7 @@ export const ModelResultsPage: React.FC = () => {
                 <span>Section 3 — 24-Class Performance (Model Evaluation Metrics)</span>
               </h3>
               <p className="text-xs text-slate-500">
-                Detailed test dataset evaluation metrics per fault category (not live predictions)
+                Detailed test dataset evaluation metrics per fault category (Sample Results)
               </p>
             </div>
 
@@ -1027,12 +1280,12 @@ export const ModelResultsPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="h-80 w-full border border-slate-100 rounded-lg p-2 bg-slate-950/5">
+          <div className="h-80 w-full border border-slate-200 rounded-lg p-2 bg-slate-50">
             <ResponsiveContainer width="100%" height="100%">
               <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-                <XAxis type="number" dataKey="x" name="Dimension 1" stroke="#94A3B8" fontSize={11} />
-                <YAxis type="number" dataKey="y" name="Dimension 2" stroke="#94A3B8" fontSize={11} />
+                <XAxis type="number" dataKey="x" name="Dimension 1" stroke="#64748B" fontSize={11} />
+                <YAxis type="number" dataKey="y" name="Dimension 2" stroke="#64748B" fontSize={11} />
                 <ZAxis type="number" range={[40, 40]} />
                 <Tooltip
                   cursor={{ strokeDasharray: '3 3' }}
@@ -1040,9 +1293,9 @@ export const ModelResultsPage: React.FC = () => {
                     if (active && payload && payload.length) {
                       const data = payload[0].payload;
                       return (
-                        <div className="bg-slate-900 text-white p-2.5 rounded-lg shadow-xl text-xs space-y-1 border border-slate-700">
-                          <p className="font-bold text-blue-400">Class #{data.classId}: {data.className}</p>
-                          <p className="font-mono text-[10px] text-slate-300">
+                        <div className="bg-white text-slate-900 p-2.5 rounded-lg shadow-xl text-xs space-y-1 border border-slate-200">
+                          <p className="font-bold text-blue-600">Class #{data.classId}: {data.className}</p>
+                          <p className="font-mono text-[10px] text-slate-500">
                             X: {data.x}, Y: {data.y}
                           </p>
                         </div>
@@ -1057,6 +1310,326 @@ export const ModelResultsPage: React.FC = () => {
           </div>
         </div>
 
+        {/* NEW SECTION — REAL MOTOR DATA */}
+        <div className="bg-white rounded-xl border border-blue-200 p-5 shadow-sm space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div>
+              <div className="flex items-center space-x-2">
+                <Server className="w-5 h-5 text-blue-600" />
+                <h3 className="text-base font-bold text-slate-900">Real Motor Data</h3>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  Pi Stream
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Live motor data collected from Raspberry Pi and stored in Supabase
+              </p>
+            </div>
+
+            {/* Realtime Status Bar & Source Badge */}
+            <div className="flex flex-wrap items-center gap-3 text-xs">
+              <span className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 rounded-lg border border-slate-200 font-medium text-slate-600">
+                <Radio
+                  className={`w-3.5 h-3.5 ${
+                    realtimeStatus === 'SUBSCRIBED'
+                      ? 'text-emerald-500 animate-pulse'
+                      : realtimeStatus === 'CHANNEL_ERROR' || realtimeStatus === 'TIMED_OUT'
+                      ? 'text-red-500'
+                      : 'text-amber-500'
+                  }`}
+                />
+                <span>
+                  {realtimeStatus === 'SUBSCRIBED'
+                    ? 'Connected / Waiting for data'
+                    : `Realtime: ${realtimeStatus}`}
+                </span>
+              </span>
+
+              <span className="flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-800 rounded-lg border border-blue-200 font-medium">
+                <Database className="w-3.5 h-3.5 text-blue-600" />
+                <span>Data Source: Supabase</span>
+              </span>
+
+              <span className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 text-slate-600 rounded-lg border border-slate-200 font-mono text-[11px]">
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                <span>Auto-refresh: 1 min</span>
+              </span>
+
+              <button
+                onClick={() => void fetchRealMonitoringData()}
+                className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors cursor-pointer"
+                title="Refresh Real Data"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingReal ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          </div>
+
+          {realError && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span><strong>Real motor data notice:</strong> {realError}</span>
+            </div>
+          )}
+
+          {isLoadingReal && realItems.length === 0 ? (
+            <div className="p-8 text-center text-xs text-slate-400 animate-pulse">
+              Connecting to Supabase real motor data tables...
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {realItems.map((item) => {
+                const sensor = item.sensorData;
+                const pred = item.prediction;
+                const health = item.health;
+                const degradation = item.degradation;
+                const maint = item.maintenance;
+
+                // INITIAL STATE: If no real non-sample data pushed from Pi yet
+                if (!item.hasRealData || !sensor) {
+                  return (
+                    <div
+                      key={item.motor_id}
+                      className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4 relative overflow-hidden flex flex-col justify-between"
+                    >
+                      <div className="absolute top-0 left-0 right-0 h-1.5 bg-slate-300" />
+
+                      <div className="space-y-4 pt-1">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                          <div className="flex items-center space-x-2.5">
+                            <span className="w-9 h-9 bg-slate-100 text-slate-700 rounded-full flex items-center justify-center font-bold text-xs border border-slate-300">
+                              M{item.motor_number}
+                            </span>
+                            <div>
+                              <h4 className="font-bold text-slate-900 text-sm">
+                                Motor {item.motor_number} | {item.motor_name}
+                              </h4>
+                              <p className="text-[11px] text-slate-400 font-mono">
+                                ID: {item.motor_id.substring(0, 8)}...
+                              </p>
+                            </div>
+                          </div>
+
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                            Awaiting Stream
+                          </span>
+                        </div>
+
+                        {/* INITIAL STATE MESSAGE */}
+                        <div className="bg-slate-50 border border-dashed border-slate-200 rounded-xl p-5 text-center space-y-2">
+                          <div className="w-10 h-10 mx-auto rounded-full bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
+                            <Radio className="w-5 h-5 animate-pulse" />
+                          </div>
+                          <p className="text-xs font-bold text-slate-800">
+                            Waiting for real motor data from Raspberry Pi...
+                          </p>
+                          <p className="text-[11px] text-slate-500 max-w-xs mx-auto leading-relaxed">
+                            No real telemetry record pushed for Motor {item.motor_number} yet. Realtime listener active on Supabase.
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-400 bg-slate-50/50 p-3 rounded-lg border border-slate-100 font-mono">
+                          <div>Voltage: <span className="text-slate-400">Waiting...</span></div>
+                          <div>Current: <span className="text-slate-400">Waiting...</span></div>
+                          <div>Temperature: <span className="text-slate-400">Waiting...</span></div>
+                          <div>Vibration: <span className="text-slate-400">Waiting...</span></div>
+                          <div>Power: <span className="text-slate-400">Waiting...</span></div>
+                          <div>Energy: <span className="text-slate-400">Waiting...</span></div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-slate-400 pt-3 border-t border-slate-100 mt-auto">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-slate-400" />
+                          Status: <strong className="text-slate-600 font-medium">Ready for Pi Stream</strong>
+                        </span>
+                        <span>Supabase Realtime</span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // DYNAMIC REAL DATA PRESENT FROM RASPBERRY PI
+                const newestTimestamp =
+                  sensor.timestamp ||
+                  pred?.timestamp ||
+                  health?.timestamp ||
+                  degradation?.timestamp ||
+                  maint?.timestamp;
+
+                const freshness = getDataFreshness(newestTimestamp);
+
+                let className = pred?.class_name;
+                if (pred?.class_id !== undefined && pred?.class_id !== null && FAULT_CLASSES[pred.class_id]) {
+                  className = FAULT_CLASSES[pred.class_id].class_name;
+                }
+
+                const decInfo = mapDecisionText(maint?.decision);
+
+                return (
+                  <div
+                    key={item.motor_id}
+                    className="bg-white rounded-xl border border-blue-200 p-5 shadow-sm space-y-4 relative overflow-hidden flex flex-col justify-between"
+                  >
+                    <div
+                      className={`absolute top-0 left-0 right-0 h-1.5 ${
+                        !pred
+                          ? 'bg-slate-300'
+                          : pred.class_id === 0
+                          ? 'bg-emerald-500'
+                          : pred.class_id >= 20
+                          ? 'bg-amber-500'
+                          : 'bg-red-600'
+                      }`}
+                    />
+
+                    <div className="space-y-4 pt-1">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <div className="flex items-center space-x-2.5">
+                          <span className="w-9 h-9 bg-emerald-50 text-emerald-800 rounded-full flex items-center justify-center font-bold text-xs border border-emerald-200 shadow-xs">
+                            M{item.motor_number}
+                          </span>
+                          <div>
+                            <h4 className="font-bold text-slate-900 text-sm">
+                              Motor {item.motor_number} | {item.motor_name}
+                            </h4>
+                            <p className="text-[11px] text-slate-400 font-mono">
+                              ID: {item.motor_id.substring(0, 8)}...
+                            </p>
+                          </div>
+                        </div>
+
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${freshness.colorClass}`}>
+                          {freshness.label}
+                        </span>
+                      </div>
+
+                      {/* REAL SENSOR PARAMETERS */}
+                      <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 space-y-2">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                          <Activity className="w-3 h-3 text-blue-500" /> Real Sensor Telemetry
+                        </p>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-slate-400 text-[11px] block">Voltage</span>
+                            <strong className="text-slate-900 font-mono">{formatVoltage(sensor.voltage)}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 text-[11px] block">Current</span>
+                            <strong className="text-slate-900 font-mono">{formatCurrent(sensor.current)}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 text-[11px] block">Temperature</span>
+                            <strong className="text-slate-900 font-mono">{formatTemperature(sensor.temperature)}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 text-[11px] block">Vibration RMS</span>
+                            <strong className="text-slate-900 font-mono">{formatVibration(sensor.vibration_rms)}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 text-[11px] block">Power</span>
+                            <strong className="text-slate-900 font-mono">{formatPower(sensor.power)}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 text-[11px] block">Energy</span>
+                            <strong className="text-slate-900 font-mono">{formatEnergy(sensor.energy)}</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* REAL AI PREDICTION RESULT */}
+                      <div className="bg-blue-50/50 p-3 rounded-lg border border-blue-100 space-y-2 text-xs">
+                        <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider flex items-center gap-1">
+                          <ShieldCheck className="w-3.5 h-3.5 text-blue-600" /> AI Fault Inference
+                        </p>
+                        {pred ? (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-slate-500 font-medium">Class ID:</span>
+                              <span className="font-mono font-bold text-slate-900 px-2 py-0.5 bg-blue-100/70 rounded text-[11px]">
+                                Class #{pred.class_id}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-slate-500 font-medium">Fault Class:</span>
+                              <span className="font-bold text-slate-900 truncate max-w-[150px]" title={className || 'Healthy'}>
+                                {className || 'Healthy'}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-slate-500 font-medium">Confidence:</span>
+                              <span className="font-mono font-black text-blue-600">
+                                {formatConfidence(pred.confidence)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-blue-100">
+                              <span>Model Version:</span>
+                              <span className="font-mono text-slate-700">{pred.model_version || '1d-cnn-edge'}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-slate-400 text-xs italic">Awaiting AI inference...</p>
+                        )}
+                      </div>
+
+                      {/* REAL HEALTH & DEGRADATION */}
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100 space-y-1">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                            <HeartPulse className="w-3 h-3 text-emerald-600" /> Health Index
+                          </p>
+                          <div className="flex items-baseline justify-between">
+                            <span className="text-base font-black text-slate-900">
+                              {health?.health_index != null ? `${health.health_index}%` : 'N/A'}
+                            </span>
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${getSeverityColorClass(health?.health_status || 'Optimal')}`}>
+                              {health?.health_status || 'Optimal'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100 space-y-1">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                            <TrendingDown className="w-3 h-3 text-amber-500" /> Degradation
+                          </p>
+                          <div>
+                            <span className="text-xs font-bold text-slate-900 block font-mono">
+                              {degradation?.degradation_rate != null ? `${Number(degradation.degradation_rate).toFixed(2)} %/h` : '0.00 %/h'}
+                            </span>
+                            <span className="text-[10px] font-medium text-slate-500 block truncate">
+                              {degradation?.degradation_status || 'Stable'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* REAL MAINTENANCE DECISION */}
+                      <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 space-y-1">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                          <Wrench className="w-3 h-3 text-blue-600" /> Maintenance Decision
+                        </p>
+                        <div className="pt-0.5">
+                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border inline-block ${decInfo.color}`}>
+                            {decInfo.title}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 pt-3 border-t border-slate-100 mt-auto">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                        Last Updated: <strong className="text-slate-700">{formatTimeHHMMSS(newestTimestamp)}</strong>
+                      </span>
+                      <span>{formatTimeAgo(newestTimestamp)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* SECTION 10 — CURRENT MOTOR FLEET HEALTH SUMMARY */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
           <div className="flex items-center justify-between">
@@ -1069,89 +1642,104 @@ export const ModelResultsPage: React.FC = () => {
                 Integrated health status & maintenance decisions stored in Supabase
               </p>
             </div>
+            {lastRealUpdateTime && (
+              <span className="text-[11px] text-slate-400 font-mono">
+                Sync: {lastRealUpdateTime}
+              </span>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {motorStatuses.length === 0 ? (
-              <div className="col-span-3 text-center py-6 text-slate-400 text-xs italic">
-                No current fleet-health records are available from the Supabase status query.
-              </div>
-            ) : (
-              motorStatuses.slice(0, 3).map((m) => (
+            {SAMPLE_MOTOR_ITEMS.map((item) => {
+              const pred = item.prediction;
+              const health = item.health;
+              const degradation = item.degradation;
+              const maint = item.maintenance;
+
+              let className = pred?.class_name || 'Healthy';
+              if (pred?.class_id !== undefined && pred?.class_id !== null && FAULT_CLASSES[pred.class_id]) {
+                className = FAULT_CLASSES[pred.class_id].class_name;
+              }
+
+              const healthStatus = health?.health_status || 'Optimal';
+
+              return (
                 <div
-                  key={m.motor_id}
-                  className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-3 relative overflow-hidden"
+                  key={item.motor_id}
+                  className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-3 relative overflow-hidden flex flex-col justify-between"
                 >
                   <div
                     className={`absolute top-0 left-0 right-0 h-1.5 ${
-                      m.motor_status === 'healthy'
+                      healthStatus === 'Optimal' || healthStatus === 'Good'
                         ? 'bg-emerald-500'
-                        : m.motor_status === 'warning'
+                        : healthStatus === 'Degraded'
                         ? 'bg-amber-500'
                         : 'bg-red-600'
                     }`}
                   />
 
-                  <div className="flex items-center justify-between pt-1">
-                    <div className="flex items-center space-x-2">
-                      <span className="w-7 h-7 bg-slate-100 text-slate-800 rounded-full flex items-center justify-center font-bold text-xs border border-slate-300">
-                        M{m.motor_number}
+                  <div>
+                    <div className="flex items-center justify-between pt-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="w-7 h-7 bg-slate-100 text-slate-800 rounded-full flex items-center justify-center font-bold text-xs border border-slate-300">
+                          M{item.motor_number}
+                        </span>
+                        <h4 className="font-bold text-slate-900 text-sm">{item.motor_name}</h4>
+                      </div>
+
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${getSeverityColorClass(
+                          healthStatus
+                        )}`}
+                      >
+                        {healthStatus}
                       </span>
-                      <h4 className="font-bold text-slate-900 text-sm">{m.motor_name}</h4>
                     </div>
 
-                    <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${getSeverityColorClass(
-                        m.severity || 'low'
-                      )}`}
-                    >
-                      {m.severity || 'Normal'}
-                    </span>
+                    <div className="space-y-2 text-xs border-t border-slate-100 pt-3 mt-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500 font-medium">Predicted Fault:</span>
+                        <span className="font-bold text-slate-900 truncate max-w-[170px]" title={className}>
+                          {className}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500 font-medium">Confidence:</span>
+                        <span className="font-mono font-bold text-blue-600">
+                          {formatConfidence(pred?.confidence)}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500 font-medium">Health Index:</span>
+                        <span className="font-bold text-slate-900">
+                          {health?.health_index ?? 100} / 100
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500 font-medium">Degradation Status:</span>
+                        <span className="font-semibold text-slate-800">
+                          {degradation?.degradation_status || 'Stable'}
+                        </span>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-100">
+                        <p className="text-[11px] text-slate-400 font-medium mb-0.5">Maintenance Recommendation:</p>
+                        <p className="text-xs text-slate-700 font-medium bg-slate-50 p-2 rounded border border-slate-100 leading-snug">
+                          {maint?.recommendation || 'Continuous routine telemetry monitoring.'}
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="space-y-2 text-xs border-t border-slate-100 pt-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500 font-medium">Predicted Fault:</span>
-                      <span className="font-bold text-slate-900 truncate max-w-[170px]" title={m.class_name || 'Healthy'}>
-                        {m.class_name || 'Healthy'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500 font-medium">Confidence:</span>
-                      <span className="font-mono font-bold text-blue-600">
-                        {Math.round((m.confidence || 0.95) * 100)}%
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500 font-medium">Health Index:</span>
-                      <span className="font-bold text-slate-900">
-                        {m.health_index ?? 98} / 100
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500 font-medium">Degradation Status:</span>
-                      <span className="font-semibold text-slate-800">
-                        {m.degradation_status || 'Stable'}
-                      </span>
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-100">
-                      <p className="text-[11px] text-slate-400 font-medium mb-0.5">Maintenance Recommendation:</p>
-                      <p className="text-xs text-slate-700 font-medium bg-slate-50 p-2 rounded border border-slate-100 leading-snug">
-                        {m.maintenance_recommendation || 'Continuous routine telemetry monitoring.'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="text-[10px] text-slate-400 text-right pt-1">
-                    Sync: {formatTimeAgo(m.sensor_timestamp)}
+                  <div className="text-[10px] text-slate-400 text-right pt-2 border-t border-slate-100 mt-auto">
+                    Fleet Baseline Data
                   </div>
                 </div>
-              ))
-            )}
+              );
+            })}
           </div>
         </div>
 

@@ -3,17 +3,20 @@ import { MainLayout } from '../components/layout/MainLayout';
 import type { DataSourceMode } from '../types/database';
 import { settingsService } from '../services/settingsService';
 import { useAuth } from '../context/AuthContextDef';
-import { Settings as SettingsIcon, Database, Check, AlertCircle } from 'lucide-react';
+import { Settings as SettingsIcon, Database, Check, AlertCircle, Clock } from 'lucide-react';
+import { formatTimeHHMMSS } from '../utils/formatters';
 
 export const SettingsPage: React.FC = () => {
   const { profile } = useAuth();
   const [mode, setMode] = useState<DataSourceMode>('demo');
   const [message, setMessage] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
   useEffect(() => {
     const fetchMode = async () => {
       const currentMode = await settingsService.getDataSourceMode();
       setMode(currentMode);
+      setLastUpdated(new Date());
     };
     fetchMode();
   }, []);
@@ -23,6 +26,7 @@ export const SettingsPage: React.FC = () => {
 
     await settingsService.setDataSourceMode(newMode, profile?.id);
     setMode(newMode);
+    setLastUpdated(new Date());
     setMessage(`Operational data source updated to ${newMode.toUpperCase()} mode.`);
   };
 
@@ -37,6 +41,10 @@ export const SettingsPage: React.FC = () => {
             <span>Global System Configuration & Operational Mode</span>
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">Admin controls for data ingestion sources and system parameters</p>
+        </div>
+        <div className="flex items-center gap-1.5 text-xs font-mono text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+          <Clock className="w-3.5 h-3.5 text-slate-400" />
+          <span>Last Updated: {formatTimeHHMMSS(lastUpdated)}</span>
         </div>
       </div>
 

@@ -3,7 +3,8 @@ import { MainLayout } from '../components/layout/MainLayout';
 import type { GpioStatus } from '../types/database';
 import { controlService } from '../services/controlService';
 import { useAuth } from '../context/AuthContextDef';
-import { Sliders, Power, Volume2, AlertOctagon, X, RotateCcw, Activity, Info } from 'lucide-react';
+import { formatTimeHHMMSS } from '../utils/formatters';
+import { Sliders, Power, Volume2, AlertOctagon, X, RotateCcw, Activity, Info, Clock, RefreshCw } from 'lucide-react';
 
 export const ControlPage: React.FC = () => {
   const { profile } = useAuth();
@@ -113,8 +114,22 @@ export const ControlPage: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center space-x-2 text-xs font-semibold">
-            <span className="px-3 py-1 bg-slate-100 rounded-lg text-slate-700 flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center space-x-3 text-xs">
+            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-lg border border-slate-200 font-medium">
+              <Clock className="w-3.5 h-3.5 text-slate-400" />
+              <span>Last Updated:</span>
+              <strong className="text-slate-800 font-mono">{formatTimeHHMMSS(gpio?.timestamp)}</strong>
+            </span>
+
+            <button
+              onClick={() => void fetchGpio()}
+              className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors"
+              title="Refresh Control Status"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSubmitting ? 'animate-spin' : ''}`} />
+            </button>
+
+            <span className="px-3 py-1 bg-slate-100 rounded-lg text-slate-700 flex items-center gap-1.5 font-semibold">
               <Activity className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
               <span>Control Commands Channel Active</span>
             </span>

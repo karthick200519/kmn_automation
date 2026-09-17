@@ -2,13 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
 import type { SystemLog } from '../types/database';
 import { logService } from '../services/logService';
-import { formatTimeAgo, getSeverityColorClass } from '../utils/formatters';
-import { Terminal, Filter, Search } from 'lucide-react';
+import { formatTimeAgo, formatTimeHHMMSS, getSeverityColorClass } from '../utils/formatters';
+import { Terminal, Filter, Search, Clock, RefreshCw } from 'lucide-react';
 
 export const SystemLogsPage: React.FC = () => {
   const [logs, setLogs] = useState<SystemLog[]>([]);
   const [eventTypeFilter, setEventTypeFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  const fetchLogs = async () => {
+    setIsLoading(true);
+    const data = await logService.getSystemLogs(50, eventTypeFilter);
+    setLogs(data);
+    setIsLoading(false);
+  };
 
   useEffect(() => {
     let active = true;
@@ -19,6 +27,12 @@ export const SystemLogsPage: React.FC = () => {
       active = false;
     };
   }, [eventTypeFilter]);
+
+  const newestTimestamp = logs.reduce<string | null>((acc, l) => {
+    if (!l.timestamp) return acc;
+    if (!acc) return l.timestamp;
+    return new Date(l.timestamp) > new Date(acc) ? l.timestamp : acc;
+  }, null);
 
   const filteredLogs = logs.filter((l) => {
     if (!searchQuery) return true;
@@ -42,7 +56,22 @@ export const SystemLogsPage: React.FC = () => {
           <p className="text-xs text-slate-500 mt-0.5">Comprehensive audit trail of authentication, relay controls, and DL inferences</p>
         </div>
 
-        <div className="flex items-center space-x-3 text-xs">
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          <span className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-lg border border-slate-200 font-medium">
+            <Clock className="w-3.5 h-3.5 text-slate-400" />
+            <span>Last Updated:</span>
+            <strong className="text-slate-800 font-mono">{formatTimeHHMMSS(newestTimestamp)}</strong>
+          </span>
+
+          <button
+            onClick={() => void fetchLogs()}
+            disabled={isLoading}
+            className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors disabled:opacity-50"
+            title="Refresh System Logs"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+          </button>
+
           <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
             <Filter className="w-3.5 h-3.5 text-slate-400" />
             <select

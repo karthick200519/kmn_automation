@@ -20,7 +20,9 @@ import {
   Mail,
   Phone,
   User as UserIcon,
+  Clock,
 } from 'lucide-react';
+import { formatTimeHHMMSS } from '../utils/formatters';
 
 export const UsersPage: React.FC = () => {
   const [users, setUsers] = useState<Profile[]>([]);
@@ -28,6 +30,7 @@ export const UsersPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
@@ -52,6 +55,7 @@ export const UsersPage: React.FC = () => {
     try {
       const data = await userService.getUsers();
       setUsers(data);
+      setLastUpdated(new Date());
     } catch (err) {
       console.error('Failed to load users:', err);
     } finally {
@@ -236,6 +240,10 @@ export const UsersPage: React.FC = () => {
                   Local Profile Mode ({MOCK_PROFILES.length} Default Profiles)
                 </span>
               )}
+              <span className="inline-flex items-center gap-1 text-[11px] font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                <Clock className="w-3 h-3 text-slate-400" />
+                <span>Last Updated: {formatTimeHHMMSS(lastUpdated)}</span>
+              </span>
             </p>
           </div>
 

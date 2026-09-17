@@ -3,8 +3,8 @@ import { MainLayout } from '../components/layout/MainLayout';
 import { useAlerts } from '../hooks/useAlerts';
 import { useMotors } from '../hooks/useMotors';
 import { useAuth } from '../context/AuthContextDef';
-import { formatTimeAgo, getSeverityColorClass } from '../utils/formatters';
-import { Bell, Filter, RefreshCw, AlertOctagon, CheckCircle2 } from 'lucide-react';
+import { formatTimeAgo, formatTimeHHMMSS, getSeverityColorClass } from '../utils/formatters';
+import { Bell, Filter, RefreshCw, AlertOctagon, CheckCircle2, Clock } from 'lucide-react';
 
 export const AlertsPage: React.FC = () => {
   const { profile } = useAuth();
@@ -15,6 +15,12 @@ export const AlertsPage: React.FC = () => {
   const { alerts, loading, refresh, acknowledgeAlert } = useAlerts(
     selectedMotorId === 'all' ? undefined : selectedMotorId
   );
+
+  const newestTimestamp = alerts.reduce<string | null>((acc, a) => {
+    if (!a.timestamp) return acc;
+    if (!acc) return a.timestamp;
+    return new Date(a.timestamp) > new Date(acc) ? a.timestamp : acc;
+  }, null);
 
   const filteredAlerts = alerts.filter((a) => {
     if (filterStatus === 'all') return true;
@@ -56,6 +62,11 @@ export const AlertsPage: React.FC = () => {
 
           {/* Filter Controls */}
           <div className="flex flex-wrap items-center gap-3 text-xs">
+            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-lg border border-slate-200 font-medium">
+              <Clock className="w-3.5 h-3.5 text-slate-400" />
+              <span>Last Updated:</span>
+              <strong className="text-slate-800 font-mono">{formatTimeHHMMSS(newestTimestamp)}</strong>
+            </span>
             <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg font-semibold">
               <Filter className="w-3.5 h-3.5 text-slate-400" />
               <select

@@ -14,8 +14,9 @@ console.log('[SUPABASE BROWSER CONFIG]', {
       : 'invalid-or-missing'
 });
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://pdlxrykekhyqesdsmkvs.supabase.co';
+const rawKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabasePublishableKey = rawKey || 'sb_publishable_demo_key';
 
 if (!supabaseUrl) {
   throw new Error('Missing VITE_SUPABASE_URL');

@@ -544,7 +544,7 @@ export const ReportsPage: React.FC = () => {
             <p className="text-xs text-slate-500">
               Period: <strong className="text-slate-800">{timeframeLabels[timeframe]}</strong>
               {' | '}
-              Live fetch: {lastUpdated?.toLocaleTimeString() || '—'}
+              Last Updated: <strong className="text-slate-800 font-mono">{lastUpdated ? lastUpdated.toLocaleTimeString() : '—'}</strong>
             </p>
           </div>
 

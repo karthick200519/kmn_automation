@@ -3,13 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import { MainLayout } from '../components/layout/MainLayout';
 import { useMotors } from '../hooks/useMotors';
 import { useMaintenance } from '../hooks/useMaintenance';
-import { formatDateTime, formatTimeAgo, getSeverityColorClass, mapDecisionText, formatConfidence } from '../utils/formatters';
+import { formatDateTime, formatTimeAgo, formatTimeHHMMSS, getSeverityColorClass, mapDecisionText, formatConfidence } from '../utils/formatters';
 import { Wrench, RefreshCw, ShieldCheck, Clock, Calendar } from 'lucide-react';
 
 export const MaintenancePage: React.FC = () => {
   const navigate = useNavigate();
   const { motors, loading: motorsLoading, refresh: refreshMotors } = useMotors();
   const { decisions, schedules, loading: maintLoading, refresh: refreshMaint } = useMaintenance();
+
+  const newestTimestamp = decisions.reduce<string | null>((acc, d) => {
+    if (!d.timestamp) return acc;
+    if (!acc) return d.timestamp;
+    return new Date(d.timestamp) > new Date(acc) ? d.timestamp : acc;
+  }, null);
 
   const handleRefresh = () => {
     refreshMotors();
@@ -31,7 +37,13 @@ export const MaintenancePage: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center space-x-3">
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            <span className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 text-slate-600 rounded-lg border border-slate-200 font-medium">
+              <Clock className="w-3.5 h-3.5 text-slate-400" />
+              <span>Last Updated:</span>
+              <strong className="text-slate-800 font-mono">{formatTimeHHMMSS(newestTimestamp)}</strong>
+            </span>
+
             <button
               onClick={() => navigate('/schedule')}
               className="px-3 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold text-xs rounded-lg border border-blue-200 flex items-center gap-1.5 transition-colors"

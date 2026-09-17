@@ -14,6 +14,7 @@ import {
   formatFrequency,
   formatPowerFactor,
   formatTimeAgo,
+  formatTimeHHMMSS,
   getDataFreshness,
   getSeverityColorClass,
 } from '../utils/formatters';
@@ -83,9 +84,11 @@ export const MotorDetailPage: React.FC = () => {
             <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase border ${getSeverityColorClass(motor.severity || motor.motor_status)}`}>
               Status: {motor.severity || motor.motor_status}
             </span>
-            <span className="text-xs font-semibold text-slate-500 flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5" />
-              {formatTimeAgo(motor.sensor_timestamp)}
+            <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5 px-3 py-1 bg-slate-50 rounded-full border border-slate-200">
+              <Clock className="w-3.5 h-3.5 text-slate-400" />
+              <span>Last Updated:</span>
+              <strong className="text-slate-700 font-mono">{formatTimeHHMMSS(motor.sensor_timestamp)}</strong>
+              <span className="text-slate-400 font-normal">({formatTimeAgo(motor.sensor_timestamp)})</span>
             </span>
           </div>
         </div>

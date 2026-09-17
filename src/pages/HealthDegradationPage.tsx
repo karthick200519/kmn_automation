@@ -1,7 +1,7 @@
 import React from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
 import { useMotors } from '../hooks/useMotors';
-import { getSeverityColorClass, formatTimeAgo, getDataFreshness } from '../utils/formatters';
+import { getSeverityColorClass, formatTimeAgo, formatTimeHHMMSS, getDataFreshness } from '../utils/formatters';
 import { Activity, ShieldCheck, TrendingDown, Clock, RefreshCw, AlertCircle } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -16,6 +16,12 @@ import {
 
 export const HealthDegradationPage: React.FC = () => {
   const { motors, loading, error, refresh } = useMotors();
+
+  const newestTimestamp = motors.reduce<string | null>((acc, m) => {
+    if (!m.sensor_timestamp) return acc;
+    if (!acc) return m.sensor_timestamp;
+    return new Date(m.sensor_timestamp) > new Date(acc) ? m.sensor_timestamp : acc;
+  }, null);
 
   const chartData = motors.map((m) => ({
     motorName: `Motor ${m.motor_number}`,
@@ -40,12 +46,20 @@ export const HealthDegradationPage: React.FC = () => {
             </p>
           </div>
 
-          <button
-            onClick={() => refresh()}
-            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs flex items-center gap-1.5 transition-colors self-start md:self-auto"
-          >
-            <RefreshCw className="w-3.5 h-3.5" /> Refresh Health Data
-          </button>
+          <div className="flex items-center space-x-3 text-xs">
+            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-lg border border-slate-200 font-medium">
+              <Clock className="w-3.5 h-3.5 text-slate-400" />
+              <span>Last Updated:</span>
+              <strong className="text-slate-800 font-mono">{formatTimeHHMMSS(newestTimestamp)}</strong>
+            </span>
+
+            <button
+              onClick={() => refresh()}
+              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs flex items-center gap-1.5 transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Refresh
+            </button>
+          </div>
         </div>
 
         {error && (

@@ -15,10 +15,11 @@ import {
   formatFrequency,
   formatPowerFactor,
   formatTimeAgo,
+  formatTimeHHMMSS,
   getDataFreshness,
   getSeverityColorClass,
 } from '../utils/formatters';
-import { Edit, Eye, Filter, LayoutGrid, List, RefreshCw, X, Zap } from 'lucide-react';
+import { Clock, Edit, Eye, Filter, LayoutGrid, List, RefreshCw, X, Zap } from 'lucide-react';
 
 const DEFAULT_RATED_SPEC = {
   rated_voltage: 415,
@@ -103,6 +104,20 @@ export const MotorsPage: React.FC = () => {
 
           {/* View Mode & Filter Controls */}
           <div className="flex flex-wrap items-center gap-3 text-xs">
+            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 rounded-lg border border-slate-200 font-medium">
+              <Clock className="w-3.5 h-3.5 text-slate-400" />
+              <span>Last Updated:</span>
+              <strong className="text-slate-800 font-mono">
+                {formatTimeHHMMSS(
+                  motors.reduce<string | null>((acc, m) => {
+                    if (!m.sensor_timestamp) return acc;
+                    if (!acc) return m.sensor_timestamp;
+                    return new Date(m.sensor_timestamp) > new Date(acc) ? m.sensor_timestamp : acc;
+                  }, null)
+                )}
+              </strong>
+            </span>
+
             <button
               onClick={() => refresh()}
               className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors"
